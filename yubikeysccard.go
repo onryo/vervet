@@ -30,7 +30,81 @@ func waitUntilCardPresent(ctx *scard.Context, readers []string) (int, error) {
 	}
 }
 
-func readSessionKey(cipherTxt []byte, cardPIN []byte) ([]byte, error) {
+func selectOpenPGPApp(card *scard.Card) error {
+	header := []byte{0x00, 0xa4, 0x04, 0x00}
+	app := []byte{0xd2, 0x76, 0x00, 0x01, 0x24, 0x01}
+	lc := byte(len(app))
+	le := byte(0x00)
+
+	cmd := append(header, lc)
+	cmd = append(cmd, app...)
+	cmd = append(cmd, le)
+
+	fmt.Println("\U0001F4E6 Selecting OpenPGP application")
+
+	rsp, err := card.Transmit(cmd)
+	if err != nil {
+		return err
+	}
+
+	success := []byte{0x90, 0x00}
+	if bytes.Compare(rsp, success) != 0 {
+		return errors.New("This YubiKey does not support OpenPGP")
+	}
+
+	return nil
+}
+
+func verifyPIN(card *scard.Card, pin []byte) error {
+	header := []byte{0x00, 0x20, 0x00, 0x82}
+	lc := byte(len(pin))
+	le := byte(0x00)
+
+	cmd := append(header, lc)
+	cmd = append(cmd, pin...)
+	cmd = append(cmd, le)
+
+	fmt.Println("\U0001F522 Verifying card PIN")
+
+	rsp, err := card.Transmit(cmd)
+	if err != nil {
+		return err
+	}
+
+	success := []byte{0x90, 0x00}
+	if bytes.Compare(rsp, success) != 0 {
+		return errors.New("Invalid PIN")
+	}
+
+	return nil
+}
+
+func decipherSessionKey(card *scard.Card, data []byte) ([]byte, error) {
+	header := []byte{0x00, 0x2a, 0x80, 0x86, 0x00}
+	payload := data[15:272]
+	lc := make([]byte, 3)
+	le := byte(0x00)
+
+	binary.BigEndian.PutUint16(lc, uint16(len(payload)))
+
+	cmd := append(header, lc...)
+	cmd = append(cmd, payload...)
+	cmd = append(cmd, le)
+
+	rsp, err := card.Transmit(cmd)
+	if err != nil {
+		die(err)
+	}
+
+	if len(rsp) != 21 {
+		return nil, errors.New("Unable to decipher PGP session key")
+	}
+
+	key := rsp[1 : len(rsp)-4]
+	return key, nil
+}
+
+func readSessionKey(data []byte, pin []byte) ([]byte, error) {
 	// Establish a context
 	ctx, err := scard.EstablishContext()
 	if err != nil {
@@ -44,7 +118,7 @@ func readSessionKey(cipherTxt []byte, cardPIN []byte) ([]byte, error) {
 		return nil, err
 	}
 
-	var sessionKey []byte
+	var key []byte
 
 	if len(readers) > 0 {
 		// wait for card
@@ -63,47 +137,25 @@ func readSessionKey(cipherTxt []byte, cardPIN []byte) ([]byte, error) {
 		defer card.Disconnect(scard.ResetCard)
 
 		// select application
-		var cmd = []byte{0x00, 0xa4, 0x04, 0x00, 0x06, 0xd2, 0x76, 0x00, 0x01, 0x24, 0x01, 0x00}
-		fmt.Println("\U0001F4E6 Selecting OpenPGP application")
-		_, err = card.Transmit(cmd)
+		err = selectOpenPGPApp(card)
 		if err != nil {
 			return nil, err
 		}
 
 		// verify pin
-		var verifyCmdPre = []byte{0x00, 0x20, 0x00, 0x82, 0x06}
-		verifyCmd := append(verifyCmdPre, cardPIN...)
-		fmt.Println("\U0001F522 Verifying card PIN")
-		verifyRsp, err := card.Transmit(verifyCmd)
+		err = verifyPIN(card, pin)
 		if err != nil {
 			return nil, err
 		}
 
-		if bytes.Compare(verifyRsp, []byte{0x90, 0x00}) != 0 {
-			return nil, errors.New("Invalid PIN")
-		}
-
 		// decrypt data
-		cipherTxtBlk := cipherTxt[15:272]
-
-		var cipherTxtBlkLen = make([]byte, 2)
-		binary.BigEndian.PutUint16(cipherTxtBlkLen, uint16(len(cipherTxtBlk)))
-
-		var decryptCmdPre = []byte{0x00, 0x2a, 0x80, 0x86, 0x00}
-		decryptCmd := append(decryptCmdPre, cipherTxtBlkLen...)
-		decryptCmd = append(decryptCmd, 0x00)
-		decryptCmd = append(decryptCmd, cipherTxtBlk...)
-		decryptCmd = append(decryptCmd, 0x00)
-
-		decryptRsp, err := card.Transmit(decryptCmd)
+		key, err = decipherSessionKey(card, data)
 		if err != nil {
-			die(err)
+			return nil, err
 		}
-
-		if len(decryptRsp) == 21 {
-			sessionKey = decryptRsp[1 : len(decryptRsp)-4]
-		}
+	} else {
+		return nil, errors.New("No YubiKeys found")
 	}
 
-	return sessionKey, nil
+	return key, nil
 }
