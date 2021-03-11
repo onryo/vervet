@@ -30,18 +30,18 @@ func waitUntilCardPresent(ctx *scard.Context, readers []string) (int, error) {
 	}
 }
 
-func readSessionKey(cipherTxt []byte, cardPIN []byte) []byte {
+func readSessionKey(cipherTxt []byte, cardPIN []byte) ([]byte, error) {
 	// Establish a context
 	ctx, err := scard.EstablishContext()
 	if err != nil {
-		die(err)
+		return nil, err
 	}
 	defer ctx.Release()
 
 	// List available readers
 	readers, err := ctx.ListReaders()
 	if err != nil {
-		die(err)
+		return nil, err
 	}
 
 	var sessionKey []byte
@@ -51,14 +51,14 @@ func readSessionKey(cipherTxt []byte, cardPIN []byte) []byte {
 		fmt.Println("\u23F3 Waiting for a Yubico YubiKey")
 		index, err := waitUntilCardPresent(ctx, readers)
 		if err != nil {
-			die(err)
+			return nil, err
 		}
 
 		// Connect to card
 		fmt.Println("\u26A1 Connecting to", readers[index])
 		card, err := ctx.Connect(readers[index], scard.ShareExclusive, scard.ProtocolAny)
 		if err != nil {
-			die(err)
+			return nil, err
 		}
 		defer card.Disconnect(scard.ResetCard)
 
@@ -67,7 +67,7 @@ func readSessionKey(cipherTxt []byte, cardPIN []byte) []byte {
 		fmt.Println("\U0001F4E6 Selecting OpenPGP application")
 		_, err = card.Transmit(cmd)
 		if err != nil {
-			die(err)
+			return nil, err
 		}
 
 		// verify pin
@@ -76,11 +76,11 @@ func readSessionKey(cipherTxt []byte, cardPIN []byte) []byte {
 		fmt.Println("\U0001F522 Verifying card PIN")
 		verifyRsp, err := card.Transmit(verifyCmd)
 		if err != nil {
-			die(err)
+			return nil, err
 		}
 
 		if bytes.Compare(verifyRsp, []byte{0x90, 0x00}) != 0 {
-			die(errors.New("Invalid PIN"))
+			return nil, errors.New("Invalid PIN")
 		}
 
 		// decrypt data
@@ -105,5 +105,5 @@ func readSessionKey(cipherTxt []byte, cardPIN []byte) []byte {
 		}
 	}
 
-	return sessionKey
+	return sessionKey, nil
 }

@@ -50,10 +50,10 @@ func getPIN() ([]byte, error) {
 	return p, nil
 }
 
-func readUnsealKeyMsg(path string) []byte {
+func readUnsealKeyMsg(path string) ([]byte, error) {
 	file, err := os.Open(path)
 	if err != nil {
-		die(err)
+		return nil, err
 	}
 	defer file.Close()
 
@@ -64,28 +64,34 @@ func readUnsealKeyMsg(path string) []byte {
 	}
 
 	if err := scanner.Err(); err != nil {
-		die(err)
+		return nil, err
 	}
 
 	encKey, err := base64.StdEncoding.DecodeString(contents)
 	if err != nil {
-		die(err)
+		return nil, err
 	}
 
-	return encKey
+	return encKey, nil
 }
 
 func main() {
 	flag.Parse()
 	path := flag.Arg(0)
-	unsealKeyMsg := readUnsealKeyMsg(path)
+	unsealKeyMsg, err := readUnsealKeyMsg(path)
+	if err != nil {
+		die(err)
+	}
 
 	pin, err := getPIN()
 	if err != nil {
 		die(err)
 	}
 
-	sessionKey := readSessionKey(unsealKeyMsg, pin)
+	sessionKey, err := readSessionKey(unsealKeyMsg, pin)
+	if err != nil {
+		die(err)
+	}
 
 	if len(sessionKey) == 16 {
 		fmt.Printf("\U0001F50D Found session key for PGP encrypted data packet: % x\n", sessionKey)
