@@ -10,11 +10,9 @@ import (
 	"io/ioutil"
 	"net/url"
 	"os"
-	"syscall"
 
 	"github.com/hashicorp/vault/api"
 	"golang.org/x/crypto/openpgp/packet"
-	"golang.org/x/crypto/ssh/terminal"
 )
 
 const (
@@ -25,29 +23,6 @@ const (
 func die(err error) {
 	fmt.Println("\U0001F6D1", err)
 	os.Exit(1)
-}
-
-func getPIN() ([]byte, error) {
-	fmt.Print("\U0001F513 Enter YubiKey OpenPGP PIN: ")
-	p, err := terminal.ReadPassword(int(syscall.Stdin))
-	if err != nil {
-		return []byte{}, err
-	}
-
-	fmt.Println()
-
-	if len(p) < pinMin || len(p) > pinMax {
-		return []byte{}, errors.New("Expected PIN length of 6-127 characters")
-	}
-
-	for i := range p {
-		if p[i] < 0x30 || p[i] > 0x39 {
-
-			return []byte{}, errors.New("Only digits 0-9 are valid PIN characters")
-		}
-	}
-
-	return p, nil
 }
 
 func readUnsealKeyMsg(path string) ([]byte, error) {
@@ -83,12 +58,7 @@ func main() {
 		die(err)
 	}
 
-	pin, err := getPIN()
-	if err != nil {
-		die(err)
-	}
-
-	sessionKey, err := readSessionKey(unsealKeyMsg, pin)
+	sessionKey, err := readSessionKey(unsealKeyMsg)
 	if err != nil {
 		die(err)
 	}

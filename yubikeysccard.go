@@ -5,13 +5,14 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"syscall"
 
 	"github.com/ebfe/scard"
+	"golang.org/x/crypto/ssh/terminal"
 )
 
 func checkSuccess(rsp []byte) (bool, error) {
-
-	if len(rsp) >= 2 {
+	if len(rsp) < 2 {
 		return false, errors.New("Invalid response status bytes length")
 	}
 
@@ -69,6 +70,29 @@ func selectOpenPGPApp(card *scard.Card) error {
 	}
 
 	return nil
+}
+
+func getPIN() ([]byte, error) {
+	fmt.Print("\U0001F513 Enter YubiKey OpenPGP PIN: ")
+	p, err := terminal.ReadPassword(int(syscall.Stdin))
+	if err != nil {
+		return []byte{}, err
+	}
+
+	fmt.Println()
+
+	if len(p) < pinMin || len(p) > pinMax {
+		return []byte{}, errors.New("Expected PIN length of 6-127 characters")
+	}
+
+	for i := range p {
+		if p[i] < 0x30 || p[i] > 0x39 {
+
+			return []byte{}, errors.New("Only digits 0-9 are valid PIN characters")
+		}
+	}
+
+	return p, nil
 }
 
 func verifyPIN(card *scard.Card, pin []byte) error {
@@ -129,7 +153,7 @@ func decipherSessionKey(card *scard.Card, data []byte) ([]byte, error) {
 	return key, nil
 }
 
-func readSessionKey(data []byte, pin []byte) ([]byte, error) {
+func readSessionKey(data []byte) ([]byte, error) {
 	// Establish a context
 	ctx, err := scard.EstablishContext()
 	if err != nil {
@@ -165,6 +189,11 @@ func readSessionKey(data []byte, pin []byte) ([]byte, error) {
 		err = selectOpenPGPApp(card)
 		if err != nil {
 			return nil, err
+		}
+
+		pin, err := getPIN()
+		if err != nil {
+			die(err)
 		}
 
 		// verify pin
