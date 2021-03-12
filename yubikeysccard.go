@@ -9,6 +9,18 @@ import (
 	"github.com/ebfe/scard"
 )
 
+func checkSuccess(rsp []byte) (bool, error) {
+
+	if len(rsp) >= 2 {
+		return false, errors.New("Invalid response status bytes length")
+	}
+
+	success := []byte{0x90, 0x00}
+	status := rsp[len(rsp)-2:]
+
+	return bytes.Compare(status, success) == 0, nil
+}
+
 func waitUntilCardPresent(ctx *scard.Context, readers []string) (int, error) {
 	rs := make([]scard.ReaderState, len(readers))
 	for i := range rs {
@@ -47,8 +59,12 @@ func selectOpenPGPApp(card *scard.Card) error {
 		return err
 	}
 
-	success := []byte{0x90, 0x00}
-	if bytes.Compare(rsp, success) != 0 {
+	success, err := checkSuccess(rsp)
+	if err != nil {
+		return err
+	}
+
+	if !success {
 		return errors.New("This YubiKey does not support OpenPGP")
 	}
 
@@ -71,8 +87,12 @@ func verifyPIN(card *scard.Card, pin []byte) error {
 		return err
 	}
 
-	success := []byte{0x90, 0x00}
-	if bytes.Compare(rsp, success) != 0 {
+	success, err := checkSuccess(rsp)
+	if err != nil {
+		return err
+	}
+
+	if !success {
 		return errors.New("Invalid PIN")
 	}
 
@@ -96,7 +116,12 @@ func decipherSessionKey(card *scard.Card, data []byte) ([]byte, error) {
 		die(err)
 	}
 
-	if len(rsp) != 21 {
+	success, err := checkSuccess(rsp)
+	if err != nil {
+		return nil, err
+	}
+
+	if !success || len(rsp) != 21 {
 		return nil, errors.New("Unable to decipher PGP session key")
 	}
 
