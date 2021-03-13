@@ -167,9 +167,6 @@ func decipherSessionKey(card *scard.Card, msg []byte) ([]byte, error) {
 		return nil, err
 	}
 
-	fmt.Printf("\tc-apdu: % x\n", data)
-	fmt.Printf("\tr-apdu: % x\n", rsp)
-
 	if !success || len(rsp) != 21 {
 		return nil, errors.New("Unable to decipher PGP session key")
 	}
