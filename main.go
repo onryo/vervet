@@ -10,14 +10,10 @@ import (
 	"io/ioutil"
 	"net/url"
 	"os"
+	"vault-yubikey-pgp-unseal/yubikeyscard"
 
 	"github.com/hashicorp/vault/api"
 	"golang.org/x/crypto/openpgp/packet"
-)
-
-const (
-	pinMin int = 6
-	pinMax int = 127
 )
 
 func die(err error) {
@@ -58,7 +54,7 @@ func main() {
 		die(err)
 	}
 
-	sessionKey, err := readSessionKey(unsealKeyMsg)
+	sessionKey, err := yubikeyscard.ReadSessionKey(unsealKeyMsg)
 	if err != nil {
 		die(err)
 	}

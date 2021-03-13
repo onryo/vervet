@@ -1,4 +1,4 @@
-package main
+package yubikeyscard
 
 import (
 	"bytes"
@@ -9,6 +9,11 @@ import (
 
 	"github.com/ebfe/scard"
 	"golang.org/x/crypto/ssh/terminal"
+)
+
+const (
+	pinMin int = 6
+	pinMax int = 127
 )
 
 func checkSuccess(rsp []byte) (bool, error) {
@@ -137,7 +142,7 @@ func decipherSessionKey(card *scard.Card, data []byte) ([]byte, error) {
 
 	rsp, err := card.Transmit(cmd)
 	if err != nil {
-		die(err)
+		return nil, err
 	}
 
 	success, err := checkSuccess(rsp)
@@ -153,7 +158,7 @@ func decipherSessionKey(card *scard.Card, data []byte) ([]byte, error) {
 	return key, nil
 }
 
-func readSessionKey(data []byte) ([]byte, error) {
+func ReadSessionKey(data []byte) ([]byte, error) {
 	// Establish a context
 	ctx, err := scard.EstablishContext()
 	if err != nil {
@@ -193,7 +198,7 @@ func readSessionKey(data []byte) ([]byte, error) {
 
 		pin, err := getPIN()
 		if err != nil {
-			die(err)
+			return nil, err
 		}
 
 		// verify pin
