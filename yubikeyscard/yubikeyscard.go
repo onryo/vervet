@@ -2,7 +2,6 @@ package yubikeyscard
 
 import (
 	"bytes"
-	"encoding/binary"
 	"errors"
 	"fmt"
 	"syscall"
@@ -15,6 +14,8 @@ const (
 	pinMin int = 6
 	pinMax int = 127
 )
+
+var appID = []byte{0xd2, 0x76, 0x00, 0x01, 0x24, 0x01} // OpenPGP applet ID
 
 func checkSuccess(rsp []byte) (bool, error) {
 	if len(rsp) < 2 {
@@ -49,18 +50,23 @@ func waitUntilCardPresent(ctx *scard.Context, readers []string) (int, error) {
 }
 
 func selectOpenPGPApp(card *scard.Card) error {
-	header := []byte{0x00, 0xa4, 0x04, 0x00}
-	app := []byte{0xd2, 0x76, 0x00, 0x01, 0x24, 0x01}
-	lc := byte(len(app))
-	le := byte(0x00)
+	cmd := commandAPDU{
+		cla:  0,
+		ins:  0xa4,
+		p1:   0x04,
+		p2:   0,
+		data: appID,
+		le:   0,
+	}
 
-	cmd := append(header, lc)
-	cmd = append(cmd, app...)
-	cmd = append(cmd, le)
+	data, err := cmd.serialize()
+	if err != nil {
+		return err
+	}
 
 	fmt.Println("\U0001F4E6 Selecting OpenPGP application")
 
-	rsp, err := card.Transmit(cmd)
+	rsp, err := card.Transmit(data)
 	if err != nil {
 		return err
 	}
@@ -101,17 +107,23 @@ func getPIN() ([]byte, error) {
 }
 
 func verifyPIN(card *scard.Card, pin []byte) error {
-	header := []byte{0x00, 0x20, 0x00, 0x82}
-	lc := byte(len(pin))
-	le := byte(0x00)
+	cmd := commandAPDU{
+		cla:  0,
+		ins:  0x20,
+		p1:   0,
+		p2:   0x82,
+		data: pin,
+		le:   0,
+	}
 
-	cmd := append(header, lc)
-	cmd = append(cmd, pin...)
-	cmd = append(cmd, le)
+	data, err := cmd.serialize()
+	if err != nil {
+		return err
+	}
 
 	fmt.Println("\U0001F522 Verifying card PIN")
 
-	rsp, err := card.Transmit(cmd)
+	rsp, err := card.Transmit(data)
 	if err != nil {
 		return err
 	}
@@ -128,19 +140,24 @@ func verifyPIN(card *scard.Card, pin []byte) error {
 	return nil
 }
 
-func decipherSessionKey(card *scard.Card, data []byte) ([]byte, error) {
-	header := []byte{0x00, 0x2a, 0x80, 0x86, 0x00}
-	payload := data[15:272]
-	lc := make([]byte, 3)
-	le := byte(0x00)
+func decipherSessionKey(card *scard.Card, msg []byte) ([]byte, error) {
+	cmd := commandAPDU{
+		cla:  0,
+		ins:  0x2a,
+		p1:   0x80,
+		p2:   0x86,
+		data: append([]byte{0}, msg[15:272]...), // prepend RSA padding indicator byte
+		le:   0,
+		pib:  true,
+		elf:  true,
+	}
 
-	binary.BigEndian.PutUint16(lc, uint16(len(payload)))
+	data, err := cmd.serialize()
+	if err != nil {
+		return nil, err
+	}
 
-	cmd := append(header, lc...)
-	cmd = append(cmd, payload...)
-	cmd = append(cmd, le)
-
-	rsp, err := card.Transmit(cmd)
+	rsp, err := card.Transmit(data)
 	if err != nil {
 		return nil, err
 	}
@@ -149,6 +166,9 @@ func decipherSessionKey(card *scard.Card, data []byte) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	fmt.Printf("\tc-apdu: % x\n", data)
+	fmt.Printf("\tr-apdu: % x\n", rsp)
 
 	if !success || len(rsp) != 21 {
 		return nil, errors.New("Unable to decipher PGP session key")
