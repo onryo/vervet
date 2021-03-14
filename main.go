@@ -56,15 +56,15 @@ func main() {
 	}
 
 	// connect YubiKey smart card interface, disconnect on return
-	yks := new(yubikeyscard.YubiKeys)
-	if err := yks.ConnectYubiKeys(); err != nil {
+	yk := new(yubikeyscard.YubiKey)
+	if err := yk.Connect(); err != nil {
 		die(err)
 	}
 
-	defer yks.DisconnectYubiKeys()
+	defer yk.Disconnect()
 
 	// retrieve the DEK (session key) from YubiKey
-	sessionKey, err := yubikeyscard.ReadSessionKey(yks.Cards[0], unsealKeyMsg)
+	sessionKey, err := yubikeyscard.Decipher(yk.Card, unsealKeyMsg[15:272])
 	if err != nil {
 		die(err)
 	}

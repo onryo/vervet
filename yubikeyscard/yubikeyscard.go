@@ -1,8 +1,10 @@
 package yubikeyscard
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
+	"strings"
 	"syscall"
 
 	"github.com/ebfe/scard"
@@ -10,15 +12,17 @@ import (
 )
 
 // YubiKeys represents the system context and slice of connected smart cards
-type YubiKeys struct {
+type YubiKey struct {
 	Context *scard.Context
-	Cards   []*scard.Card
+	Card    *scard.Card
 }
 
 const (
 	pinMin int = 6
 	pinMax int = 127
 )
+
+var yubikeyReaderID = "Yubico YubiKey OTP+FIDO+CCID"
 
 var appID = []byte{0xd2, 0x76, 0x00, 0x01, 0x24, 0x01} // OpenPGP applet ID
 
@@ -43,8 +47,8 @@ func waitUntilCardPresent(ctx *scard.Context, readers []string) (int, error) {
 	}
 }
 
-func selectOpenPGPApp(card *scard.Card) error {
-	cmd := commandAPDU{
+func SelectApp(card *scard.Card) error {
+	ca := commandAPDU{
 		cla:  0,
 		ins:  0xa4,
 		p1:   0x04,
@@ -53,14 +57,14 @@ func selectOpenPGPApp(card *scard.Card) error {
 		le:   0,
 	}
 
-	data, err := cmd.serialize()
+	cmd, err := ca.serialize()
 	if err != nil {
 		return err
 	}
 
 	fmt.Println("\U0001F4E6 Selecting OpenPGP application")
 
-	rsp, err := card.Transmit(data)
+	rsp, err := card.Transmit(cmd)
 	if err != nil {
 		return err
 	}
@@ -77,7 +81,7 @@ func selectOpenPGPApp(card *scard.Card) error {
 	return nil
 }
 
-func getPIN() ([]byte, error) {
+func promptPIN() ([]byte, error) {
 	fmt.Print("\U0001F513 Enter YubiKey OpenPGP PIN: ")
 	p, err := terminal.ReadPassword(int(syscall.Stdin))
 	if err != nil {
@@ -100,10 +104,16 @@ func getPIN() ([]byte, error) {
 	return p, nil
 }
 
-func verifyPIN(card *scard.Card) error {
-	pin, err := getPIN()
-	if err != nil {
-		return err
+// Verify PIN to allow access to restricted operations, prompt if PIN empty
+func Verify(card *scard.Card, pin []byte) error {
+	// prompt user if PIN argument is empty
+	if bytes.Equal(pin, []byte{}) {
+		p, err := promptPIN()
+		if err != nil {
+			return err
+		}
+
+		pin = p
 	}
 
 	ca := commandAPDU{
@@ -115,14 +125,14 @@ func verifyPIN(card *scard.Card) error {
 		le:   0,
 	}
 
-	data, err := ca.serialize()
+	cmd, err := ca.serialize()
 	if err != nil {
 		return err
 	}
 
 	fmt.Println("\U0001F522 Verifying card PIN")
 
-	rsp, err := card.Transmit(data)
+	rsp, err := card.Transmit(cmd)
 	if err != nil {
 		return err
 	}
@@ -139,24 +149,31 @@ func verifyPIN(card *scard.Card) error {
 	return nil
 }
 
-func decipherSessionKey(card *scard.Card, msg []byte) ([]byte, error) {
+// Decipher data with private key on smart card
+func Decipher(card *scard.Card, data []byte) ([]byte, error) {
 	ca := commandAPDU{
 		cla:  0,
 		ins:  0x2a,
 		p1:   0x80,
 		p2:   0x86,
-		data: append([]byte{0}, msg[15:272]...), // prepend RSA padding indicator byte
+		data: append([]byte{0}, data...), // prepend RSA padding indicator byte
 		le:   0,
 		pib:  true,
 		elf:  true,
 	}
 
-	data, err := ca.serialize()
+	// verify PIN
+	err := Verify(card, []byte{})
 	if err != nil {
 		return nil, err
 	}
 
-	rsp, err := card.Transmit(data)
+	cmd, err := ca.serialize()
+	if err != nil {
+		return nil, err
+	}
+
+	rsp, err := card.Transmit(cmd)
 	if err != nil {
 		return nil, err
 	}
@@ -175,14 +192,14 @@ func decipherSessionKey(card *scard.Card, msg []byte) ([]byte, error) {
 }
 
 // ConnectYubiKeys establishes the system context and opens sessions with all available smart card readers
-func (yks *YubiKeys) ConnectYubiKeys() error {
+func (yk *YubiKey) Connect() error {
 	// Establish a context
 	ctx, err := scard.EstablishContext()
 	if err != nil {
 		return err
 	}
 
-	yks.Context = ctx
+	yk.Context = ctx
 
 	// List available readers
 	readers, err := ctx.ListReaders()
@@ -190,24 +207,32 @@ func (yks *YubiKeys) ConnectYubiKeys() error {
 		return err
 	}
 
-	if len(readers) > 0 {
+	// Ignore other smart cards
+	var yks []string
+	for _, r := range readers {
+		if strings.HasPrefix(r, yubikeyReaderID) {
+			yks = append(yks, r)
+		}
+	}
+
+	if len(yks) > 0 {
 		// wait for card
 		fmt.Println("\u23F3 Waiting for a Yubico YubiKey")
-		index, err := waitUntilCardPresent(ctx, readers)
+		i, err := waitUntilCardPresent(ctx, yks)
 		if err != nil {
 			return err
 		}
 
 		// Connect to card
-		fmt.Println("\u26A1 Connecting to", readers[index])
-		card, err := ctx.Connect(readers[index], scard.ShareExclusive, scard.ProtocolAny)
+		fmt.Println("\u26A1 Connecting to", yks[i])
+		card, err := ctx.Connect(yks[i], scard.ShareExclusive, scard.ProtocolAny)
 		if err != nil {
 			return err
 		}
 
 		// if card supports OpenPGP applet, select application, and add it to cards
-		if err = selectOpenPGPApp(card); err == nil {
-			yks.Cards = append(yks.Cards, card)
+		if err = SelectApp(card); err == nil {
+			yk.Card = card
 		}
 	} else {
 		return errors.New("No YubiKeys found")
@@ -218,40 +243,18 @@ func (yks *YubiKeys) ConnectYubiKeys() error {
 
 // DisconnectYubiKeys disconnects all open sessions smart cards and
 // releases the system context
-func (yks *YubiKeys) DisconnectYubiKeys() error {
-	for _, card := range yks.Cards {
-		// Disconnect cards by sending reset command
-		err := card.Disconnect(scard.ResetCard)
-		if err != nil {
-			return err
-		}
+func (yk *YubiKey) Disconnect() error {
+	// Disconnect cards by sending reset command
+	err := yk.Card.Disconnect(scard.ResetCard)
+	if err != nil {
+		return err
 	}
 
 	// Release reader context
-	err := yks.Context.Release()
+	err = yk.Context.Release()
 	if err != nil {
 		return err
 	}
 
 	return nil
-}
-
-// ReadSessionKey will decrypt the message DEK (session key) if corresponding
-// private key is on smart card
-func ReadSessionKey(card *scard.Card, data []byte) ([]byte, error) {
-	var key []byte
-
-	// verify pin
-	err := verifyPIN(card)
-	if err != nil {
-		return nil, err
-	}
-
-	// decrypt data
-	key, err = decipherSessionKey(card, data)
-	if err != nil {
-		return nil, err
-	}
-
-	return key, nil
 }
