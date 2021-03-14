@@ -212,7 +212,10 @@ func (yks *YubiKeys) ConnectYubiKeys() error {
 			return err
 		}
 
-		yks.Cards = append(yks.Cards, card)
+		// if card supports OpenPGP applet, select application, and add it to cards
+		if err = selectOpenPGPApp(card); err == nil {
+			yks.Cards = append(yks.Cards, card)
+		}
 	} else {
 		return errors.New("No YubiKeys found")
 	}
@@ -244,12 +247,6 @@ func (yks *YubiKeys) DisconnectYubiKeys() error {
 // private key is on smart card
 func ReadSessionKey(card *scard.Card, data []byte) ([]byte, error) {
 	var key []byte
-
-	// select application
-	err := selectOpenPGPApp(card)
-	if err != nil {
-		return nil, err
-	}
 
 	pin, err := getPIN()
 	if err != nil {
