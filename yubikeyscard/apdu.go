@@ -6,13 +6,6 @@ import (
 	"fmt"
 )
 
-// Padding indicator byte values
-const (
-	pibNone = 0xff
-	pibRSA  = 0
-	pibAES  = 2
-)
-
 // commandAPDU represents an application data unit sent to a smartcard.
 type commandAPDU struct {
 	cla, ins, p1, p2 uint8  // Class, Instruction, Parameter 1, Parameter 2
@@ -68,8 +61,8 @@ func (ca commandAPDU) serialize() ([]byte, error) {
 
 // responseAPDU represents an application data unit received from a smart card.
 type responseAPDU struct {
-	Data     []byte // response data
-	Sw1, Sw2 uint8  // status words 1 and 2
+	data     []byte // response data
+	sw1, sw2 uint8  // status words 1 and 2
 }
 
 // deserialize deserializes a response APDU.
@@ -78,16 +71,16 @@ func (ra *responseAPDU) deserialize(data []byte) error {
 		return fmt.Errorf("can not deserialize data: payload too short (%d < 2)", len(data))
 	}
 
-	ra.Data = make([]byte, len(data)-2)
+	ra.data = make([]byte, len(data)-2)
 
 	buf := bytes.NewReader(data)
-	if err := binary.Read(buf, binary.BigEndian, &ra.Data); err != nil {
+	if err := binary.Read(buf, binary.BigEndian, &ra.data); err != nil {
 		return err
 	}
-	if err := binary.Read(buf, binary.BigEndian, &ra.Sw1); err != nil {
+	if err := binary.Read(buf, binary.BigEndian, &ra.sw1); err != nil {
 		return err
 	}
-	if err := binary.Read(buf, binary.BigEndian, &ra.Sw2); err != nil {
+	if err := binary.Read(buf, binary.BigEndian, &ra.sw2); err != nil {
 		return err
 	}
 	return nil
