@@ -1,7 +1,6 @@
 package yubikeyscard
 
 import (
-	"bytes"
 	"errors"
 	"fmt"
 	"syscall"
@@ -22,17 +21,6 @@ const (
 )
 
 var appID = []byte{0xd2, 0x76, 0x00, 0x01, 0x24, 0x01} // OpenPGP applet ID
-
-func checkSuccess(rsp []byte) (bool, error) {
-	if len(rsp) < 2 {
-		return false, errors.New("Invalid response status bytes length")
-	}
-
-	success := []byte{0x90, 0x00}
-	status := rsp[len(rsp)-2:]
-
-	return bytes.Compare(status, success) == 0, nil
-}
 
 func waitUntilCardPresent(ctx *scard.Context, readers []string) (int, error) {
 	rs := make([]scard.ReaderState, len(readers))
@@ -77,12 +65,12 @@ func selectOpenPGPApp(card *scard.Card) error {
 		return err
 	}
 
-	success, err := checkSuccess(rsp)
-	if err != nil {
+	ra := new(responseAPDU)
+	if err = ra.deserialize(rsp); err != nil {
 		return err
 	}
 
-	if !success {
+	if !ra.checkSuccess() {
 		return errors.New("This YubiKey does not support OpenPGP")
 	}
 
@@ -112,8 +100,13 @@ func getPIN() ([]byte, error) {
 	return p, nil
 }
 
-func verifyPIN(card *scard.Card, pin []byte) error {
-	cmd := commandAPDU{
+func verifyPIN(card *scard.Card) error {
+	pin, err := getPIN()
+	if err != nil {
+		return err
+	}
+
+	ca := commandAPDU{
 		cla:  0,
 		ins:  0x20,
 		p1:   0,
@@ -122,7 +115,7 @@ func verifyPIN(card *scard.Card, pin []byte) error {
 		le:   0,
 	}
 
-	data, err := cmd.serialize()
+	data, err := ca.serialize()
 	if err != nil {
 		return err
 	}
@@ -134,12 +127,12 @@ func verifyPIN(card *scard.Card, pin []byte) error {
 		return err
 	}
 
-	success, err := checkSuccess(rsp)
-	if err != nil {
+	ra := new(responseAPDU)
+	if err = ra.deserialize(rsp); err != nil {
 		return err
 	}
 
-	if !success {
+	if !ra.checkSuccess() {
 		return errors.New("Invalid PIN")
 	}
 
@@ -147,7 +140,7 @@ func verifyPIN(card *scard.Card, pin []byte) error {
 }
 
 func decipherSessionKey(card *scard.Card, msg []byte) ([]byte, error) {
-	cmd := commandAPDU{
+	ca := commandAPDU{
 		cla:  0,
 		ins:  0x2a,
 		p1:   0x80,
@@ -158,7 +151,7 @@ func decipherSessionKey(card *scard.Card, msg []byte) ([]byte, error) {
 		elf:  true,
 	}
 
-	data, err := cmd.serialize()
+	data, err := ca.serialize()
 	if err != nil {
 		return nil, err
 	}
@@ -168,16 +161,16 @@ func decipherSessionKey(card *scard.Card, msg []byte) ([]byte, error) {
 		return nil, err
 	}
 
-	success, err := checkSuccess(rsp)
-	if err != nil {
+	ra := new(responseAPDU)
+	if err = ra.deserialize(rsp); err != nil {
 		return nil, err
 	}
 
-	if !success || len(rsp) != 21 {
+	if !ra.checkSuccess() || len(ra.data) != 19 {
 		return nil, errors.New("Unable to decipher PGP session key")
 	}
 
-	key := rsp[1 : len(rsp)-4]
+	key := ra.data[1 : len(ra.data)-2]
 	return key, nil
 }
 
@@ -248,13 +241,8 @@ func (yks *YubiKeys) DisconnectYubiKeys() error {
 func ReadSessionKey(card *scard.Card, data []byte) ([]byte, error) {
 	var key []byte
 
-	pin, err := getPIN()
-	if err != nil {
-		return nil, err
-	}
-
 	// verify pin
-	err = verifyPIN(card, pin)
+	err := verifyPIN(card)
 	if err != nil {
 		return nil, err
 	}
