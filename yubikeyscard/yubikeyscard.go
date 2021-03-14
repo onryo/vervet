@@ -10,6 +10,11 @@ import (
 	"golang.org/x/crypto/ssh/terminal"
 )
 
+type YubiKeys struct {
+	Context *scard.Context
+	Cards   []*scard.Card
+}
+
 const (
 	pinMin int = 6
 	pinMax int = 127
@@ -175,62 +180,86 @@ func decipherSessionKey(card *scard.Card, msg []byte) ([]byte, error) {
 	return key, nil
 }
 
-func ReadSessionKey(data []byte) ([]byte, error) {
+func (yks *YubiKeys) ConnectYubiKeys() error {
 	// Establish a context
 	ctx, err := scard.EstablishContext()
 	if err != nil {
-		return nil, err
+		return err
 	}
-	defer ctx.Release()
+
+	yks.Context = ctx
 
 	// List available readers
 	readers, err := ctx.ListReaders()
 	if err != nil {
-		return nil, err
+		return err
 	}
-
-	var key []byte
 
 	if len(readers) > 0 {
 		// wait for card
 		fmt.Println("\u23F3 Waiting for a Yubico YubiKey")
 		index, err := waitUntilCardPresent(ctx, readers)
 		if err != nil {
-			return nil, err
+			return err
 		}
 
 		// Connect to card
 		fmt.Println("\u26A1 Connecting to", readers[index])
 		card, err := ctx.Connect(readers[index], scard.ShareExclusive, scard.ProtocolAny)
 		if err != nil {
-			return nil, err
-		}
-		defer card.Disconnect(scard.ResetCard)
-
-		// select application
-		err = selectOpenPGPApp(card)
-		if err != nil {
-			return nil, err
+			return err
 		}
 
-		pin, err := getPIN()
-		if err != nil {
-			return nil, err
-		}
-
-		// verify pin
-		err = verifyPIN(card, pin)
-		if err != nil {
-			return nil, err
-		}
-
-		// decrypt data
-		key, err = decipherSessionKey(card, data)
-		if err != nil {
-			return nil, err
-		}
+		yks.Cards = append(yks.Cards, card)
 	} else {
-		return nil, errors.New("No YubiKeys found")
+		return errors.New("No YubiKeys found")
+	}
+
+	return nil
+}
+
+func (yks *YubiKeys) DisconnectYubiKeys() error {
+	for _, card := range yks.Cards {
+		// Disconnect cards by sending reset command
+		err := card.Disconnect(scard.ResetCard)
+		if err != nil {
+			return err
+		}
+	}
+
+	// Release reader context
+	err := yks.Context.Release()
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func ReadSessionKey(card *scard.Card, data []byte) ([]byte, error) {
+	var key []byte
+
+	// select application
+	err := selectOpenPGPApp(card)
+	if err != nil {
+		return nil, err
+	}
+
+	pin, err := getPIN()
+	if err != nil {
+		return nil, err
+	}
+
+	// verify pin
+	err = verifyPIN(card, pin)
+	if err != nil {
+		return nil, err
+	}
+
+	// decrypt data
+	key, err = decipherSessionKey(card, data)
+	if err != nil {
+		return nil, err
 	}
 
 	return key, nil

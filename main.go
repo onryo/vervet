@@ -47,6 +47,7 @@ func readUnsealKeyMsg(path string) ([]byte, error) {
 }
 
 func main() {
+	// parse arg[0] for file name and read base64-encoded PGP message containing Vault unseal key
 	flag.Parse()
 	path := flag.Arg(0)
 	unsealKeyMsg, err := readUnsealKeyMsg(path)
@@ -54,7 +55,16 @@ func main() {
 		die(err)
 	}
 
-	sessionKey, err := yubikeyscard.ReadSessionKey(unsealKeyMsg)
+	// connect YubiKey smart card interface, disconnect on return
+	yks := new(yubikeyscard.YubiKeys)
+	if err := yks.ConnectYubiKeys(); err != nil {
+		die(err)
+	}
+
+	defer yks.DisconnectYubiKeys()
+
+	// retrieve the DEK (session key) from YubiKey
+	sessionKey, err := yubikeyscard.ReadSessionKey(yks.Cards[0], unsealKeyMsg)
 	if err != nil {
 		die(err)
 	}
@@ -66,6 +76,7 @@ func main() {
 		die(err)
 	}
 
+	// decrypt message with DEK
 	md, err := readMessage(bytes.NewReader(unsealKeyMsg), sessionKey, packet.CipherAES128)
 
 	unsealKey, err := ioutil.ReadAll(md.UnverifiedBody)
@@ -75,6 +86,7 @@ func main() {
 
 	fmt.Println("\U0001F511 Decrypted Vault unseal key:", string(unsealKey))
 
+	// connect to Vault server and execute unseal operation
 	vaultAddr := os.Getenv("VAULT_ADDR")
 	vaultURL, err := url.Parse(vaultAddr)
 	if err != nil {
