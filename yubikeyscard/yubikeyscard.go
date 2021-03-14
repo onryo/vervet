@@ -10,6 +10,7 @@ import (
 	"golang.org/x/crypto/ssh/terminal"
 )
 
+// YubiKeys represents the system context and slice of connected smart cards
 type YubiKeys struct {
 	Context *scard.Context
 	Cards   []*scard.Card
@@ -180,6 +181,7 @@ func decipherSessionKey(card *scard.Card, msg []byte) ([]byte, error) {
 	return key, nil
 }
 
+// ConnectYubiKeys establishes the system context and opens sessions with all available smart card readers
 func (yks *YubiKeys) ConnectYubiKeys() error {
 	// Establish a context
 	ctx, err := scard.EstablishContext()
@@ -218,6 +220,8 @@ func (yks *YubiKeys) ConnectYubiKeys() error {
 	return nil
 }
 
+// DisconnectYubiKeys disconnects all open sessions smart cards and
+// releases the system context
 func (yks *YubiKeys) DisconnectYubiKeys() error {
 	for _, card := range yks.Cards {
 		// Disconnect cards by sending reset command
@@ -236,6 +240,8 @@ func (yks *YubiKeys) DisconnectYubiKeys() error {
 	return nil
 }
 
+// ReadSessionKey will decrypt the message DEK (session key) if corresponding
+// private key is on smart card
 func ReadSessionKey(card *scard.Card, data []byte) ([]byte, error) {
 	var key []byte
 
