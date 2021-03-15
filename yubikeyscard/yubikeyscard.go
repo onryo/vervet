@@ -24,8 +24,6 @@ const (
 
 var yubikeyReaderID = "Yubico YubiKey OTP+FIDO+CCID"
 
-var appID = []byte{0xd2, 0x76, 0x00, 0x01, 0x24, 0x01} // OpenPGP applet ID
-
 func waitUntilCardPresent(ctx *scard.Context, readers []string) (int, error) {
 	rs := make([]scard.ReaderState, len(readers))
 	for i := range rs {
@@ -57,20 +55,10 @@ func SelectApp(card *scard.Card) error {
 		le:   0,
 	}
 
-	cmd, err := ca.serialize()
-	if err != nil {
-		return err
-	}
-
 	fmt.Println("\U0001F4E6 Selecting OpenPGP application")
 
-	rsp, err := card.Transmit(cmd)
+	ra, err := transmit(card, ca)
 	if err != nil {
-		return err
-	}
-
-	ra := new(responseAPDU)
-	if err = ra.deserialize(rsp); err != nil {
 		return err
 	}
 
@@ -79,6 +67,48 @@ func SelectApp(card *scard.Card) error {
 	}
 
 	return nil
+}
+
+func GetData(card *scard.Card, tag [2]byte) ([]byte, error) {
+	data := []byte{}
+
+	ca := commandAPDU{
+		cla: 0,
+		ins: 0xca,
+		p1:  tag[0],
+		p2:  tag[1],
+		le:  0,
+	}
+
+	ra, err := transmit(card, ca)
+	if err != nil {
+		return nil, err
+	}
+
+	data = append(data, ra.data...)
+
+	for !ra.checkSuccess() {
+		if ra.sw1 == 0x61 {
+			ca = commandAPDU{
+				cla: 0,
+				ins: 0xc0,
+				p1:  0,
+				p2:  0,
+				le:  0,
+			}
+
+			ra, err = transmit(card, ca)
+			if err != nil {
+				return nil, err
+			}
+
+			data = append(data, ra.data...)
+		} else {
+			return nil, errors.New("An error occurred, could not get data segment")
+		}
+	}
+
+	return data, nil
 }
 
 func promptPIN() ([]byte, error) {
@@ -125,20 +155,10 @@ func Verify(card *scard.Card, pin []byte) error {
 		le:   0,
 	}
 
-	cmd, err := ca.serialize()
-	if err != nil {
-		return err
-	}
-
 	fmt.Println("\U0001F522 Verifying card PIN")
 
-	rsp, err := card.Transmit(cmd)
+	ra, err := transmit(card, ca)
 	if err != nil {
-		return err
-	}
-
-	ra := new(responseAPDU)
-	if err = ra.deserialize(rsp); err != nil {
 		return err
 	}
 
@@ -168,18 +188,8 @@ func Decipher(card *scard.Card, data []byte) ([]byte, error) {
 		return nil, err
 	}
 
-	cmd, err := ca.serialize()
+	ra, err := transmit(card, ca)
 	if err != nil {
-		return nil, err
-	}
-
-	rsp, err := card.Transmit(cmd)
-	if err != nil {
-		return nil, err
-	}
-
-	ra := new(responseAPDU)
-	if err = ra.deserialize(rsp); err != nil {
 		return nil, err
 	}
 
@@ -257,4 +267,24 @@ func (yk *YubiKey) Disconnect() error {
 	}
 
 	return nil
+}
+
+func transmit(card *scard.Card, ca commandAPDU) (responseAPDU, error) {
+	ra := new(responseAPDU)
+
+	cmd, err := ca.serialize()
+	if err != nil {
+		return *ra, err
+	}
+
+	rsp, err := card.Transmit(cmd)
+	if err != nil {
+		return *ra, err
+	}
+
+	if err = ra.deserialize(rsp); err != nil {
+		return *ra, err
+	}
+
+	return *ra, nil
 }

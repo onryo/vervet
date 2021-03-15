@@ -6,6 +6,8 @@ import (
 	"fmt"
 )
 
+var appID = []byte{0xd2, 0x76, 0x00, 0x01, 0x24, 0x01} // OpenPGP applet ID
+
 // commandAPDU represents an application data unit sent to a smartcard.
 type commandAPDU struct {
 	cla, ins, p1, p2 uint8  // Class, Instruction, Parameter 1, Parameter 2
