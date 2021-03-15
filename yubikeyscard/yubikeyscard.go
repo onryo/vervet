@@ -134,6 +134,16 @@ func promptPIN() ([]byte, error) {
 	return p, nil
 }
 
+func getPINRetries(card *scard.Card) (int, error) {
+	tag := [2]byte{0, 0xc4}
+	data, err := GetData(card, tag)
+	if err != nil {
+		return 0, err
+	}
+
+	return int(data[4]), nil
+}
+
 // Verify PIN to allow access to restricted operations, prompt if PIN empty
 func Verify(card *scard.Card, pin []byte) error {
 	// prompt user if PIN argument is empty
@@ -163,7 +173,17 @@ func Verify(card *scard.Card, pin []byte) error {
 	}
 
 	if !ra.checkSuccess() {
-		return errors.New("Invalid PIN")
+		retries, err := getPINRetries(card)
+		if err != nil {
+			return err
+		}
+
+		verb := "retry"
+		if retries > 1 {
+			verb = "retries"
+		}
+
+		return fmt.Errorf("Invalid PIN, %d %s remaining", retries, verb)
 	}
 
 	return nil
