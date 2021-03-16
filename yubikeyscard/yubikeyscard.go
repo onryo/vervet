@@ -188,6 +188,20 @@ func Verify(card *scard.Card, pin []byte) error {
 	return nil
 }
 
+func GetFingerprints(card *scard.Card) ([]byte, error) {
+	data, err := GetData(card, doAppRelData)
+	if err != nil {
+		return nil, err
+	}
+
+	fps, err := doFindTLV(data, doFingerprints.tag, 2)
+	if err != nil {
+		return nil, err
+	}
+
+	return fps, nil
+}
+
 // Decipher data with private key on smart card
 func Decipher(card *scard.Card, data []byte) ([]byte, error) {
 	ca := commandAPDU{
