@@ -77,24 +77,15 @@ func (do DataObject) tagP2() byte {
 	return do.tagBytes()[1]
 }
 
-// static const unsigned char *
-// do_find_tlv (const unsigned char *buffer, size_t length,
-//  int tag, size_t *nbytes, int nestlevel)
-
 func doFindTLV(data []byte, tag uint16, nestLevel int) ([]byte, error) {
-	//   const unsigned char *s = buffer;
-	//   size_t n = length;
-	//   size_t len;
-	//   int this_tag;
-	//   int composite;
-
 	var o int = 0
 	var n int = len(data)
 	var tagLen uint16
 	var thisTag uint16
+	var tagFound bool
 	var composite bool
 
-	for true {
+	for !tagFound {
 		if n < 2 { // Buffer definitely too short for tag and length.
 			return nil, errors.New("No data present in buffer")
 		}
@@ -159,14 +150,13 @@ func doFindTLV(data []byte, tag uint16, nestLevel int) ([]byte, error) {
 		}
 
 		if thisTag == tag {
-			return data[o : o+int(tagLen)], nil
-		}
-		if int(tagLen) > n { // Buffer too short to skip to the next tag.
+			tagFound = true
+		} else if int(tagLen) > n { // Buffer too short to skip to the next tag.
 			return nil, errors.New("Buffer too short to skip to the next tag")
+		} else {
+			o += int(tagLen)
+			n -= int(tagLen)
 		}
-
-		o += int(tagLen)
-		n -= int(tagLen)
 	}
 
 	return data[o : o+int(tagLen)], nil
