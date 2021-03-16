@@ -2,6 +2,7 @@ package yubikeyscard
 
 import (
 	"bytes"
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"strings"
@@ -12,15 +13,23 @@ import (
 )
 
 // YubiKeys represents the system context and slice of connected smart cards
+
+const (
+	pinMin          int = 6
+	pinMax          int = 127
+	fingerprintSize int = 20
+)
+
 type YubiKey struct {
 	Context *scard.Context
 	Card    *scard.Card
 }
 
-const (
-	pinMin int = 6
-	pinMax int = 127
-)
+type Fingerprints struct {
+	Sign    []byte
+	Encrypt []byte
+	Auth    []byte
+}
 
 var yubikeyReaderID = "Yubico YubiKey OTP+FIDO+CCID"
 
@@ -188,15 +197,31 @@ func Verify(card *scard.Card, pin []byte) error {
 	return nil
 }
 
-func GetFingerprints(card *scard.Card) ([]byte, error) {
+func GetFingerprints(card *scard.Card) (Fingerprints, error) {
+	fps := Fingerprints{}
 	data, err := GetData(card, doAppRelData)
 	if err != nil {
-		return nil, err
+		return fps, err
 	}
 
-	fps, err := doFindTLV(data, doFingerprints.tag, 2)
+	fpData, err := doFindTLV(data, doFingerprints.tag, 2)
 	if err != nil {
-		return nil, err
+		return fps, err
+	}
+
+	buf := bytes.NewReader(fpData)
+	var fpSign, fpEncrypt, fpAuth []byte
+	for _, fp := range []*[]byte{&fpSign, &fpEncrypt, &fpAuth} {
+		*fp = make([]byte, fingerprintSize)
+		if err := binary.Read(buf, binary.BigEndian, fp); err != nil {
+			return fps, err
+		}
+	}
+
+	fps = Fingerprints{
+		Sign:    fpSign,
+		Encrypt: fpEncrypt,
+		Auth:    fpAuth,
 	}
 
 	return fps, nil
