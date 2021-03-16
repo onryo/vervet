@@ -69,14 +69,14 @@ func SelectApp(card *scard.Card) error {
 	return nil
 }
 
-func GetData(card *scard.Card, tag [2]byte) ([]byte, error) {
+func GetData(card *scard.Card, do DataObject) ([]byte, error) {
 	data := []byte{}
 
 	ca := commandAPDU{
 		cla: 0,
 		ins: 0xca,
-		p1:  tag[0],
-		p2:  tag[1],
+		p1:  do.tagP1(),
+		p2:  do.tagP2(),
 		le:  0,
 	}
 
@@ -135,8 +135,7 @@ func promptPIN() ([]byte, error) {
 }
 
 func getPINRetries(card *scard.Card) (int, error) {
-	tag := [2]byte{0, 0xc4}
-	data, err := GetData(card, tag)
+	data, err := GetData(card, doPWStatus)
 	if err != nil {
 		return 0, err
 	}
