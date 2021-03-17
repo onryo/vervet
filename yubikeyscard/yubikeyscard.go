@@ -114,7 +114,7 @@ func SelectApp(card *scard.Card) error {
 
 	fmt.Println("\U0001F4E6 Selecting OpenPGP application")
 
-	ra, err := transmit(card, ca)
+	ra, err := ca.transmit(card)
 	if err != nil {
 		return err
 	}
@@ -137,7 +137,7 @@ func GetData(card *scard.Card, do DataObject) ([]byte, error) {
 		le:  0,
 	}
 
-	ra, err := transmit(card, ca)
+	ra, err := ca.transmit(card)
 	if err != nil {
 		return nil, err
 	}
@@ -154,7 +154,7 @@ func GetData(card *scard.Card, do DataObject) ([]byte, error) {
 				le:  0,
 			}
 
-			ra, err = transmit(card, ca)
+			ra, err = ca.transmit(card)
 			if err != nil {
 				return nil, err
 			}
@@ -223,7 +223,7 @@ func Verify(card *scard.Card, pin []byte) error {
 
 	fmt.Println("\U0001F522 Verifying card PIN")
 
-	ra, err := transmit(card, ca)
+	ra, err := ca.transmit(card)
 	if err != nil {
 		return err
 	}
@@ -391,7 +391,7 @@ func Decipher(card *scard.Card, data []byte) ([]byte, error) {
 		return nil, err
 	}
 
-	ra, err := transmit(card, ca)
+	ra, err := ca.transmit(card)
 	if err != nil {
 		return nil, err
 	}
@@ -470,24 +470,4 @@ func (yk *YubiKey) Disconnect() error {
 	}
 
 	return nil
-}
-
-func transmit(card *scard.Card, ca commandAPDU) (responseAPDU, error) {
-	ra := new(responseAPDU)
-
-	cmd, err := ca.serialize()
-	if err != nil {
-		return *ra, err
-	}
-
-	rsp, err := card.Transmit(cmd)
-	if err != nil {
-		return *ra, err
-	}
-
-	if err = ra.deserialize(rsp); err != nil {
-		return *ra, err
-	}
-
-	return *ra, nil
 }

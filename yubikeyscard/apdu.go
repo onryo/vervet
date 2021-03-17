@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
+
+	"github.com/ebfe/scard"
 )
 
 var appID = []byte{0xd2, 0x76, 0x00, 0x01, 0x24, 0x01} // OpenPGP applet ID
@@ -59,6 +61,27 @@ func (ca commandAPDU) serialize() ([]byte, error) {
 	}
 
 	return buf.Bytes(), nil
+}
+
+// transmit will send the serialized APDU command to the applet.
+func (ca commandAPDU) transmit(card *scard.Card) (responseAPDU, error) {
+	ra := new(responseAPDU)
+
+	cmd, err := ca.serialize()
+	if err != nil {
+		return *ra, err
+	}
+
+	rsp, err := card.Transmit(cmd)
+	if err != nil {
+		return *ra, err
+	}
+
+	if err = ra.deserialize(rsp); err != nil {
+		return *ra, err
+	}
+
+	return *ra, nil
 }
 
 // responseAPDU represents an application data unit received from a smart card.
