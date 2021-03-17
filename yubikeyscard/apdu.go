@@ -79,12 +79,13 @@ func (ra *responseAPDU) deserialize(data []byte) error {
 	if err := binary.Read(buf, binary.BigEndian, &ra.data); err != nil {
 		return err
 	}
-	if err := binary.Read(buf, binary.BigEndian, &ra.sw1); err != nil {
-		return err
+
+	for _, sw := range []*byte{&ra.sw1, &ra.sw2} {
+		if err := binary.Read(buf, binary.BigEndian, sw); err != nil {
+			return err
+		}
 	}
-	if err := binary.Read(buf, binary.BigEndian, &ra.sw2); err != nil {
-		return err
-	}
+
 	return nil
 }
 
