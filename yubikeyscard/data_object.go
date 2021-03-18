@@ -23,6 +23,7 @@ var doHistBytes = DataObject{tag: 0x5F52, constructed: false, parent: 0, binary:
 var doCardRelData = DataObject{tag: 0x0065, constructed: true, parent: 0, binary: true, extLen: 0, desc: "Cardholder Related Data"}
 var doName = DataObject{tag: 0x005B, constructed: false, parent: 0x65, binary: false, extLen: 0, desc: "Name"}
 var doLangPrefs = DataObject{tag: 0x5F2D, constructed: false, parent: 0x65, binary: false, extLen: 0, desc: "Language preferences"}
+var doSalutation = DataObject{tag: 0x5F35, constructed: false, parent: 0x65, binary: false, extLen: 0, desc: "Salutation"}
 var doAppRelData = DataObject{tag: 0x006E, constructed: true, parent: 0, binary: true, extLen: 0, desc: "Application Related Data"}
 var doLoginData = DataObject{tag: 0x005E, constructed: false, parent: 0, binary: true, extLen: 2, desc: "Login Data"}
 var doAID = DataObject{tag: 0x004F, constructed: false, parent: 0x6E, binary: true, extLen: 0, desc: "Application Idenfifier (AID)"}
@@ -55,12 +56,12 @@ var doKDFDO = DataObject{tag: 0x00F9, constructed: false, parent: 0, binary: tru
 var doAlgoInfo = DataObject{tag: 0x00FA, constructed: false, parent: 0, binary: true, extLen: 2, desc: "Algorithm Information"}
 
 var DataObjects = []DataObject{
-	doURL, doHistBytes, doCardRelData, doName, doLangPrefs, doAppRelData,
-	doLoginData, doAID, doDiscrDOs, doCardCaps, doExtLenCaps, doAlgoAttrSign,
-	doAlgoAttrEnc, doAlgoAttrAuth, doPWStatus, doFingerprints, doCAFingerprints,
-	doKeyGenDate, doSecSuppTmpl, doDigSigCtr, doPrivateDO1, doPrivateDO2,
-	doPrivateDO3, doPrivateDO4, doCardholderCrt, doGenFeatMgmt, doAESKeyData,
-	doUIFSig, doUIFDec, doUIFAut, doUIFAtt, doKDFDO, doAlgoInfo,
+	doURL, doHistBytes, doCardRelData, doName, doLangPrefs, doSalutation,
+	doAppRelData, doLoginData, doAID, doDiscrDOs, doCardCaps, doExtLenCaps,
+	doAlgoAttrSign, doAlgoAttrEnc, doAlgoAttrAuth, doPWStatus, doFingerprints,
+	doCAFingerprints, doKeyGenDate, doSecSuppTmpl, doDigSigCtr, doPrivateDO1,
+	doPrivateDO2, doPrivateDO3, doPrivateDO4, doCardholderCrt, doGenFeatMgmt,
+	doAESKeyData, doUIFSig, doUIFDec, doUIFAut, doUIFAtt, doKDFDO, doAlgoInfo,
 }
 
 func (do DataObject) tagBytes() []byte {
