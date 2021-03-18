@@ -26,8 +26,16 @@ const (
 )
 
 type YubiKey struct {
-	Context *scard.Context
-	Card    *scard.Card
+	Context         *scard.Context
+	Card            *scard.Card
+	CardRelatedData CardRelatedData
+	AppRelatedData  AppRelatedData
+}
+
+type CardRelatedData struct {
+	Name          []byte
+	LanguagePrefs []byte
+	Salutation    byte
 }
 
 type AppRelatedData struct {
@@ -132,6 +140,41 @@ func getPINRetries(card *scard.Card) (int, error) {
 	}
 
 	return int(data[4]), nil
+}
+
+func GetCardRelatedData(card *scard.Card) (CardRelatedData, error) {
+	var crd CardRelatedData
+	data, err := GetData(card, doCardRelData)
+	if err != nil {
+		return CardRelatedData{}, err
+	}
+
+	for _, c := range doCardRelData.getChildren() {
+		cData := doFindTLV(data, c.tag, 1)
+		buf := bytes.NewReader(cData)
+
+		switch c.tag {
+		case doName.tag:
+			crd.Name = make([]byte, buf.Len())
+			if err := binary.Read(buf, binary.BigEndian, &crd.Name); err != nil {
+				return CardRelatedData{}, err
+			}
+		case doLangPrefs.tag:
+			crd.LanguagePrefs = make([]byte, buf.Len())
+			if err := binary.Read(buf, binary.BigEndian, &crd.LanguagePrefs); err != nil {
+				return CardRelatedData{}, err
+			}
+		case doSalutation.tag:
+			if err := binary.Read(buf, binary.BigEndian, &crd.Salutation); err != nil {
+				return CardRelatedData{}, err
+			}
+		}
+		if err != nil {
+			return CardRelatedData{}, err
+		}
+	}
+
+	return crd, nil
 }
 
 func GetAppRelatedData(card *scard.Card) (AppRelatedData, error) {
@@ -303,6 +346,15 @@ func (yk *YubiKey) Connect() error {
 		// if card supports OpenPGP applet, select application, and add it to cards
 		if err = SelectApp(card); err == nil {
 			yk.Card = card
+		}
+
+		// Populate card and application-related data.
+		if yk.CardRelatedData, err = GetCardRelatedData(card); err != nil {
+			return err
+		}
+
+		if yk.AppRelatedData, err = GetAppRelatedData(card); err != nil {
+			return err
 		}
 	} else {
 		return errors.New("No YubiKeys found")
