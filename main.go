@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"os"
 	"syscall"
+	"vault-yubikey-pgp-unseal/yubikeypgp"
 	"vault-yubikey-pgp-unseal/yubikeyscard"
 
 	"github.com/hashicorp/vault/api"
@@ -85,7 +86,7 @@ func main() {
 	defer yk.Disconnect()
 
 	// decrypt unseal key with DEK
-	unsealKey, err := readUnsealKey(yk, unsealKeyMsg, promptPIN)
+	unsealKey, err := yubikeypgp.ReadUnsealKey(yk, unsealKeyMsg, promptPIN)
 	if err != nil {
 		die(err)
 	}

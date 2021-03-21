@@ -1,4 +1,4 @@
-package main
+package yubikeypgp
 
 import (
 	"bytes"
@@ -30,7 +30,7 @@ type encryptedKeyPacket struct {
 	encryptedBytes []byte
 }
 
-func readUnsealKey(yk *yubikeyscard.YubiKey, msg []byte, prompt PinPromptFunction) ([]byte, error) {
+func ReadUnsealKey(yk *yubikeyscard.YubiKey, msg []byte, prompt PinPromptFunction) ([]byte, error) {
 	// read encrypted key packet fields and deserialize to struct
 	ek, err := readEncKeyPacket(bytes.NewReader(msg))
 	if err != nil {
