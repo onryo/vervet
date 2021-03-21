@@ -2,23 +2,44 @@ package main
 
 import (
 	"bufio"
-	"bytes"
 	"encoding/base64"
 	"errors"
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"net/url"
 	"os"
+	"syscall"
 	"vault-yubikey-pgp-unseal/yubikeyscard"
 
 	"github.com/hashicorp/vault/api"
-	"golang.org/x/crypto/openpgp/packet"
+	"golang.org/x/crypto/ssh/terminal"
 )
 
 func die(err error) {
 	fmt.Println("\U0001F6D1", err)
 	os.Exit(1)
+}
+
+func promptPIN() ([]byte, error) {
+	fmt.Print("\U0001F513 Enter YubiKey OpenPGP PIN: ")
+	p, err := terminal.ReadPassword(int(syscall.Stdin))
+	if err != nil {
+		return []byte{}, err
+	}
+
+	fmt.Println()
+
+	if len(p) < 6 || len(p) > 127 {
+		return []byte{}, errors.New("expected PIN length of 6-127 characters")
+	}
+
+	for i := range p {
+		if p[i] < 0x30 || p[i] > 0x39 {
+			return []byte{}, errors.New("only digits 0-9 are valid PIN characters")
+		}
+	}
+
+	return p, nil
 }
 
 func readUnsealKeyMsg(path string) ([]byte, error) {
@@ -63,23 +84,8 @@ func main() {
 
 	defer yk.Disconnect()
 
-	// retrieve the DEK (session key) from YubiKey
-	sessionKey, err := yubikeyscard.Decipher(yk.Card, unsealKeyMsg[15:272])
-	if err != nil {
-		die(err)
-	}
-
-	if len(sessionKey) == 16 {
-		fmt.Printf("\U0001F50D Found session key for PGP encrypted data packet: % x\n", sessionKey)
-	} else {
-		err := errors.New("Session key not found, exiting")
-		die(err)
-	}
-
-	// decrypt message with DEK
-	md, err := readMessage(bytes.NewReader(unsealKeyMsg), sessionKey, packet.CipherAES128)
-
-	unsealKey, err := ioutil.ReadAll(md.UnverifiedBody)
+	// decrypt unseal key with DEK
+	unsealKey, err := readUnsealKey(yk, unsealKeyMsg, promptPIN)
 	if err != nil {
 		die(err)
 	}
