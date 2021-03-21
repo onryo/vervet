@@ -1,7 +1,6 @@
 package yubikeyscard
 
 import (
-	"bytes"
 	"errors"
 	"fmt"
 
@@ -15,16 +14,14 @@ func Decipher(card *scard.Card, data []byte) ([]byte, error) {
 		ins:  0x2a,
 		p1:   0x80,
 		p2:   0x86,
-		data: append([]byte{0}, data...), // prepend RSA padding indicator byte
+		data: append(append([]byte{0}, data...), 1), // prepend RSA padding indicator byte and append footer
 		le:   0,
 		pib:  true,
 		elf:  true,
 	}
 
-	// verify PIN
-	err := Verify(card, []byte{})
-	if err != nil {
-		return nil, err
+	if len(data)%16 != 0 {
+		return nil, errors.New("Decipher input blocks should be in multiples of 16 bytes")
 	}
 
 	ra, err := ca.transmit(card)
@@ -32,12 +29,11 @@ func Decipher(card *scard.Card, data []byte) ([]byte, error) {
 		return nil, err
 	}
 
-	if !ra.checkSuccess() || len(ra.data) != 19 {
-		return nil, errors.New("Unable to decipher PGP session key")
+	if !ra.checkSuccess() {
+		return nil, errors.New("Decipher operation unsuccessful")
 	}
 
-	key := ra.data[1 : len(ra.data)-2]
-	return key, nil
+	return ra.data, nil
 }
 
 func GetData(card *scard.Card, do DataObject) ([]byte, error) {
@@ -108,16 +104,6 @@ func SelectApp(card *scard.Card) error {
 
 // Verify PIN to allow access to restricted operations, prompt if PIN empty
 func Verify(card *scard.Card, pin []byte) error {
-	// prompt user if PIN argument is empty
-	if bytes.Equal(pin, []byte{}) {
-		p, err := promptPIN()
-		if err != nil {
-			return err
-		}
-
-		pin = p
-	}
-
 	ca := commandAPDU{
 		cla:  0,
 		ins:  0x20,

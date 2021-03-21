@@ -6,10 +6,8 @@ import (
 	"errors"
 	"fmt"
 	"strings"
-	"syscall"
 
 	"github.com/ebfe/scard"
-	"golang.org/x/crypto/ssh/terminal"
 )
 
 // YubiKeys represents the system context and slice of connected smart cards
@@ -108,29 +106,6 @@ func waitUntilCardPresent(ctx *scard.Context, readers []string) (int, error) {
 			return -1, err
 		}
 	}
-}
-
-func promptPIN() ([]byte, error) {
-	fmt.Print("\U0001F513 Enter YubiKey OpenPGP PIN: ")
-	p, err := terminal.ReadPassword(int(syscall.Stdin))
-	if err != nil {
-		return []byte{}, err
-	}
-
-	fmt.Println()
-
-	if len(p) < pinMin || len(p) > pinMax {
-		return []byte{}, errors.New("Expected PIN length of 6-127 characters")
-	}
-
-	for i := range p {
-		if p[i] < 0x30 || p[i] > 0x39 {
-
-			return []byte{}, errors.New("Only digits 0-9 are valid PIN characters")
-		}
-	}
-
-	return p, nil
 }
 
 func getPINRetries(card *scard.Card) (int, error) {
