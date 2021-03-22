@@ -26,6 +26,7 @@ const (
 type YubiKey struct {
 	Context         *scard.Context
 	Card            *scard.Card
+	ReaderLabel     string
 	CardRelatedData CardRelatedData
 	AppRelatedData  AppRelatedData
 }
@@ -320,6 +321,7 @@ func (yk *YubiKey) Connect() error {
 
 		// if card supports OpenPGP applet, select application, and add it to cards
 		if err = SelectApp(card); err == nil {
+			yk.ReaderLabel = yks[i]
 			yk.Card = card
 		}
 
