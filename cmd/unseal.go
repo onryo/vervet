@@ -13,7 +13,7 @@ import (
 
 	"github.com/hashicorp/vault/api"
 	"github.com/spf13/cobra"
-	"golang.org/x/crypto/ssh/terminal"
+	"golang.org/x/term"
 )
 
 var (
@@ -53,7 +53,7 @@ func init() {
 
 func promptPIN() ([]byte, error) {
 	fmt.Print("\U0001F513 Enter YubiKey OpenPGP PIN: ")
-	p, err := terminal.ReadPassword(int(syscall.Stdin))
+	p, err := term.ReadPassword(int(syscall.Stdin))
 	if err != nil {
 		return []byte{}, err
 	}
@@ -142,8 +142,8 @@ func unsealVault(vaultAddr string, unsealKey string) error {
 	}
 
 	if !sealStatusRsp.Sealed {
-		err := errors.New("Vault server (" + vaultURL.Host + ") is already unsealed")
-		return err
+		fmt.Println("\u2705 Vault server (" + vaultURL.Host + ") is already unsealed")
+		return nil
 	}
 
 	sealStatusRsp, err = client.Sys().Unseal(unsealKey)
