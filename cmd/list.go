@@ -25,6 +25,10 @@ var listCmd = &cobra.Command{
 	},
 }
 
+func init() {
+	rootCmd.AddCommand(listCmd)
+}
+
 func printYubiKeyInfo() error {
 	// connect YubiKey smart card interface, disconnect on return
 	yk := new(yubikeyscard.YubiKey)
@@ -52,7 +56,7 @@ func printYubiKeyInfo() error {
 	}
 	fmt.Println("Manufacturer .....: Yubico")
 	fmt.Printf("Serial number ....: %x\n", yk.AppRelatedData.AID.Serial)
-	fmt.Printf("Name of cardholder: %s\n", yk.CardRelatedData.Name)
+	fmt.Printf("Name of cardholder: %s\n", strings.Replace(fmt.Sprintf("%s", yk.CardRelatedData.Name), "<<", " ", -1))
 	fmt.Printf("Language prefs ...: %s\n", yk.CardRelatedData.LanguagePrefs)
 	fmt.Printf("Salutation .......: %c\n", yk.CardRelatedData.Salutation)
 	// URL of public key : [not set]
@@ -72,15 +76,15 @@ func printYubiKeyInfo() error {
 		yk.AppRelatedData.PWStatus.PW3RetryCtr)
 	// Signature counter : 4
 	// KDF setting ......: off
-	fmt.Printf("Signature key ....: %x\n", yk.AppRelatedData.Fingerprints.Sign)
+	fmt.Printf("Signature key ....: %s\n", fmtFingerprint(yk.AppRelatedData.Fingerprints.Sign))
 	signGenDate := int64(binary.BigEndian.Uint32(yk.AppRelatedData.KeyGenDates.Sign[:]))
-	fmt.Printf("\tcreated ....: %s\n", time.Unix(signGenDate, 0))
-	fmt.Printf("Encryption key....: %x\n", yk.AppRelatedData.Fingerprints.Enc)
+	fmt.Printf("      created ....: %s\n", time.Unix(signGenDate, 0))
+	fmt.Printf("Encryption key....: %s\n", fmtFingerprint(yk.AppRelatedData.Fingerprints.Enc))
 	encGenDate := int64(binary.BigEndian.Uint32(yk.AppRelatedData.KeyGenDates.Enc[:]))
-	fmt.Printf("\tcreated ....: %s\n", time.Unix(encGenDate, 0))
-	fmt.Printf("Authentication key: %x\n", yk.AppRelatedData.Fingerprints.Auth)
+	fmt.Printf("      created ....: %s\n", time.Unix(encGenDate, 0))
+	fmt.Printf("Authentication key: %s\n", fmtFingerprint(yk.AppRelatedData.Fingerprints.Auth))
 	authGenDate := int64(binary.BigEndian.Uint32(yk.AppRelatedData.KeyGenDates.Auth[:]))
-	fmt.Printf("\tcreated ....: %s\n", time.Unix(authGenDate, 0))
+	fmt.Printf("      created ....: %s\n", time.Unix(authGenDate, 0))
 
 	return nil
 }
@@ -88,13 +92,11 @@ func printYubiKeyInfo() error {
 func fmtFingerprint(fp [20]byte) string {
 	var fpString string
 
-	for i := 0; i < len(fp); i += 4 {
-		sep := " "
-		if i == 4 {
-			sep = " "
+	for i := 0; i < len(fp); i += 2 {
+		fpString = strings.ToUpper(fmt.Sprintf(fpString+"%x ", fp[i:i+2]))
+		if i == 8 {
+			fpString = fpString + " "
 		}
-
-		fpString = fpString + string(fp[i:i+4]) + sep
 	}
 
 	return strings.TrimSpace(fpString)

@@ -1,10 +1,10 @@
 package cmd
 
 import (
-	"bufio"
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"io"
 	"net/url"
 	"os"
 	"syscall"
@@ -17,38 +17,65 @@ import (
 )
 
 var (
-	UnsealKeyPath string
-	VaultAddress  string
+	UnsealKeyPath   string
+	UnsealKeyBinary bool
+	VaultAddress    string
+	VaultPort       int
+	VaultTLSDisable bool
 )
+
+func init() {
+	rootCmd.AddCommand(unsealCmd)
+
+	unsealCmd.AddCommand(serverSubCmd)
+
+	serverSubCmd.Flags().IntVarP(&VaultPort, "port", "p", 8200, "Vault API port")
+	serverSubCmd.Flags().BoolVarP(&VaultTLSDisable, "no-tls", "n", false, "disable TLS")
+	serverSubCmd.Flags().BoolVarP(&UnsealKeyBinary, "binary", "b", false, "read encrypted unseal key file as binary data")
+	// unsealCmd.Flags().StringVarP(&VaultAddress, "address", "a", "", "address of Vault server to unseal")
+
+}
 
 var unsealCmd = &cobra.Command{
 	Use:   "unseal",
+	Short: "Unseal Vault by server or cluster",
+	Long:  `Decrypt the unseal key and attempt to unseal Vault.`,
+}
+
+var serverSubCmd = &cobra.Command{
+	Use:   "server <vault address> <unseal key>",
 	Short: "Unseal Vault server(s)",
 	Long:  `Decrypt the unseal key and attempt to unseal Vault.`,
-	RunE: func(cmd *cobra.Command, args []string) error {
-		unsealKeyMsg, err := readUnsealKeyMsgFile(UnsealKeyPath)
+	Args:  cobra.ExactArgs(2),
+	Run: func(cmd *cobra.Command, args []string) {
+		unsealKeyMsg, err := readUnsealKeyMsgFile(args[1], UnsealKeyBinary)
 		if err != nil {
-			return err
+			fmt.Println("\U0001F6D1", err)
+			return
 		}
 
 		unsealKey, err := getUnsealKey(unsealKeyMsg)
 		if err != nil {
-			return err
+			fmt.Println("\U0001F6D1", err)
+			return
 		}
 
-		err = unsealVault(VaultAddress, unsealKey)
+		vaultProtocol := "https"
+		if VaultTLSDisable {
+			vaultProtocol = "http"
+		}
+
+		vaultURL := url.URL{
+			Scheme: vaultProtocol,
+			Host:   args[0] + ":" + fmt.Sprintf("%d", VaultPort),
+		}
+
+		err = unsealVault(vaultURL.String(), unsealKey)
 		if err != nil {
-			return err
+			fmt.Println("\U0001F6D1", err)
+			return
 		}
-
-		return nil
 	},
-}
-
-func init() {
-	unsealCmd.Flags().StringVarP(&UnsealKeyPath, "key", "k", "", "path to PGP-encrypted Vault unseal key")
-	unsealCmd.Flags().StringVarP(&VaultAddress, "address", "a", "", "address of Vault server to unseal")
-
 }
 
 func promptPIN() ([]byte, error) {
@@ -73,26 +100,29 @@ func promptPIN() ([]byte, error) {
 	return p, nil
 }
 
-func readUnsealKeyMsgFile(path string) ([]byte, error) {
+func readUnsealKeyMsgFile(path string, binary bool) ([]byte, error) {
+	var buf []byte
+	var encKey []byte
+
 	file, err := os.Open(path)
 	if err != nil {
 		return nil, err
 	}
+
 	defer file.Close()
 
-	var contents string
-	scanner := bufio.NewScanner(file)
-	for scanner.Scan() {
-		contents += scanner.Text()
-	}
-
-	if err := scanner.Err(); err != nil {
-		return nil, err
-	}
-
-	encKey, err := base64.StdEncoding.DecodeString(contents)
+	buf, err = io.ReadAll(file)
 	if err != nil {
 		return nil, err
+	}
+
+	if !binary {
+		encKey, err = base64.StdEncoding.DecodeString(fmt.Sprintf("%s", buf))
+		if err != nil {
+			return nil, errors.New("encrypted unseal key file is not base64 encoded, use -b for binary PGP data")
+		}
+	} else {
+		encKey = buf
 	}
 
 	return encKey, nil
@@ -119,10 +149,6 @@ func getUnsealKey(cipherTxt []byte) (string, error) {
 
 // connect to Vault server and execute unseal operation
 func unsealVault(vaultAddr string, unsealKey string) error {
-	if vaultAddr == "" {
-		vaultAddr = os.Getenv("VAULT_ADDR")
-	}
-
 	vaultURL, err := url.Parse(vaultAddr)
 	if err != nil {
 		return err
@@ -136,24 +162,34 @@ func unsealVault(vaultAddr string, unsealKey string) error {
 		return err
 	}
 
-	sealStatusRsp, err := client.Sys().SealStatus()
+	sealStatusRsp, err := client.Sys().Unseal(unsealKey)
 	if err != nil {
 		return err
 	}
 
-	if !sealStatusRsp.Sealed {
-		fmt.Println("\u2705 Vault server (" + vaultURL.Host + ") is already unsealed")
-		return nil
-	}
-
-	sealStatusRsp, err = client.Sys().Unseal(unsealKey)
-	if err != nil {
-		return err
-	}
-
-	if !sealStatusRsp.Sealed {
-		fmt.Println("\u2705 Vault server (" + vaultURL.Host + ") is unsealed!")
-	}
+	printSealStatus(vaultURL, sealStatusRsp)
 
 	return nil
+}
+
+func printSealStatus(url *url.URL, resp *api.SealStatusResponse) {
+	fmt.Printf("Vault server: %s\n", url.Host)
+
+	status := "unsealed"
+	if resp.Sealed {
+		status = "sealed"
+	} else {
+		fmt.Printf("Cluster name: %s\n", resp.ClusterName)
+		fmt.Printf("Cluster ID: %s\n", resp.ClusterID)
+	}
+
+	if resp.Initialized {
+		fmt.Printf("Seal Status: %s\n", status)
+		fmt.Printf("Key Threshold/Shares: %d/%d\n", resp.T, resp.N)
+		fmt.Printf("Progress: %d/%d\n", resp.Progress, resp.T)
+		fmt.Printf("Version: %s\n", resp.Version)
+
+	} else {
+		fmt.Println("Vault server is not initialized.")
+	}
 }
