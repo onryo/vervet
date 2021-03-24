@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"strings"
 	"time"
-	"vault-yubikey-pgp-unseal/yubikeyscard"
+	"vervet/yubikeyscard"
 
 	"github.com/spf13/cobra"
 )

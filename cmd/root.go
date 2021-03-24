@@ -6,9 +6,9 @@ import (
 
 var (
 	rootCmd = &cobra.Command{
-		Use:   "vault-yubikey-pgp-unseal",
+		Use:   "vervet",
 		Short: "A utility for unsealing HashiCorp Vault with YubiKeys",
-		Long: `vault-yubikey-pgp-unseal is a CLI utility that streamlines Vault unseal
+		Long: `Vervet is a CLI utility that streamlines Vault unseal
 operations. The tool will decrypt PGP-encrypted Vault unseal key using 
 the YubiKey OpenPGP applet.`,
 	}

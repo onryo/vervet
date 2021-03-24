@@ -8,8 +8,8 @@ import (
 	"net/url"
 	"os"
 	"syscall"
-	"vault-yubikey-pgp-unseal/yubikeypgp"
-	"vault-yubikey-pgp-unseal/yubikeyscard"
+	"vervet/yubikeypgp"
+	"vervet/yubikeyscard"
 
 	"github.com/hashicorp/vault/api"
 	"github.com/spf13/cobra"

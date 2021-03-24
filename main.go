@@ -1,7 +1,7 @@
 package main
 
 import (
-	"vault-yubikey-pgp-unseal/cmd"
+	"vervet/cmd"
 )
 
 func main() {
