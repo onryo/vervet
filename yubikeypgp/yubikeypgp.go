@@ -5,7 +5,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"io"
-	"vault-yubikey-pgp-unseal/yubikeyscard"
+	"vervet/yubikeyscard"
 
 	"golang.org/x/crypto/openpgp/packet"
 )

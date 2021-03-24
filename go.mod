@@ -1,4 +1,4 @@
-module vault-yubikey-pgp-unseal
+module vervet
 
 go 1.16
 
