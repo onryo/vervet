@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"encoding/base64"
-	"fmt"
 	"log"
 	"vervet/vervet"
 
@@ -25,14 +24,14 @@ func init() {
 
 var generateRootCmd = &cobra.Command{
 	Use:   "generate-root",
-	Short: "generate root token for Vault cluster",
+	Short: "generate Vault root token",
 	Long:  `Decrypt the unseal key and generate root token for Vault cluster.`,
 }
 
 var generateRootServerSubCmd = &cobra.Command{
-	Use:   "server <vault address> <unseal key> -n <nonce>",
+	Use:   "server <vault address> <unseal key path> -n <nonce>",
 	Short: "Generate root token for Vault cluster",
-	Long:  `Decrypt the unseal key and generate root token for Vault cluster.`,
+	Long:  `Decrypt the unseal key and generate Vault root token.`,
 	Args:  cobra.ExactArgs(2),
 	Run: func(cmd *cobra.Command, args []string) {
 		server := args[0]
@@ -60,15 +59,14 @@ var generateRootServerSubCmd = &cobra.Command{
 var generateRootClusterSubCmd = &cobra.Command{
 	Use:   "cluster <cluster name> -n <nonce>",
 	Short: "Generate root token for Vault cluster",
-	Long:  `Decrypt the unseal key and generate root token for Vault cluster.`,
+	Long:  `Decrypt the unseal key and generate Vault root token.`,
 	Args:  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		clusterName := args[0]
 
 		cluster, err := getVaultClusterConfig(clusterName)
 		if err != nil {
-			fmt.Println(err)
-			return
+			log.Fatal(err)
 		}
 
 		for _, server := range cluster.Servers {
@@ -85,7 +83,8 @@ var generateRootClusterSubCmd = &cobra.Command{
 
 				err = vervet.VaultGenerateRoot(server, generateRootKey, vaultGenerateRootNonce)
 				if err != nil {
-					log.Fatal(err)
+					// if there is an issue, break the loop, and move to next server
+					break
 				}
 			}
 		}

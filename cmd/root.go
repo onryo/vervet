@@ -22,9 +22,8 @@ var (
 	rootCmd = &cobra.Command{
 		Use:   "vervet",
 		Short: "A utility for unsealing HashiCorp Vault with YubiKeys",
-		Long: `Vervet is a CLI utility that streamlines Vault unseal
-operations. The tool will decrypt PGP-encrypted Vault unseal key using 
-the YubiKey OpenPGP applet.`,
+		Long: `Vervet is a CLI utility that streamlines Vault unseal operations. The tool will
+decrypt PGP-encrypted Vault unseal key using the YubiKey OpenPGP applet.`,
 	}
 )
 
