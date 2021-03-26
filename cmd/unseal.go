@@ -36,19 +36,19 @@ var serverSubCmd = &cobra.Command{
 		server := args[0]
 		unsealKeyPath := args[1]
 
-		unsealKeyMsg, err := vervet.ReadUnsealKeyFile(unsealKeyPath, unsealKeyFileBinary)
+		unsealKeyMsg, err := vervet.ReadVaultUnsealKeyFile(unsealKeyPath, unsealKeyFileBinary)
 		if err != nil {
 			log.Fatal(err)
 		}
 
-		unsealKey, err := vervet.DecryptUnsealKey(unsealKeyMsg)
+		unsealKey, err := vervet.YubiKeyDecrypt(unsealKeyMsg)
 		if err != nil {
 			log.Fatal(err)
 		}
 
 		vaultAddr := getVaultAddress(server)
 
-		err = vervet.UnsealVault(vaultAddr, unsealKey)
+		err = vervet.VaultUnseal(vaultAddr, unsealKey)
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -76,12 +76,12 @@ var clusterSubCmd = &cobra.Command{
 					log.Fatal("encrypted unseal key file is not base64 encoded, use -b for binary PGP data")
 				}
 
-				unsealKey, err := vervet.DecryptUnsealKey(key)
+				unsealKey, err := vervet.YubiKeyDecrypt(key)
 				if err != nil {
 					log.Fatal(err)
 				}
 
-				err = vervet.UnsealVault(server, unsealKey)
+				err = vervet.VaultUnseal(server, unsealKey)
 				if err != nil {
 					log.Fatal(err)
 				}

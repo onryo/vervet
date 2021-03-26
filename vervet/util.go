@@ -12,7 +12,7 @@ import (
 	"vervet/yubikeyscard"
 )
 
-func ReadUnsealKeyFile(path string, binary bool) ([]byte, error) {
+func ReadVaultUnsealKeyFile(path string, binary bool) ([]byte, error) {
 	var buf []byte
 	var encKey []byte
 
@@ -40,7 +40,7 @@ func ReadUnsealKeyFile(path string, binary bool) ([]byte, error) {
 	return encKey, nil
 }
 
-func PrintYubiKeyInfo() error {
+func YubiKeyPrintInfo() error {
 	// connect YubiKey smart card interface, disconnect on return
 	yk := new(yubikeyscard.YubiKey)
 	if err := yk.Connect(); err != nil {

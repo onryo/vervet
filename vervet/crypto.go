@@ -10,7 +10,7 @@ import (
 	"golang.org/x/term"
 )
 
-func DecryptUnsealKey(cipherTxt []byte) (string, error) {
+func YubiKeyDecrypt(cipherTxt []byte) (string, error) {
 	// connect YubiKey smart card interface, disconnect on return
 	yk := new(yubikeyscard.YubiKey)
 	if err := yk.Connect(); err != nil {
