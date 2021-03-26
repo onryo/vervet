@@ -88,7 +88,7 @@ func (do DataObject) getChildren() []DataObject {
 	var c []DataObject
 
 	for _, d := range DataObjects {
-		if bytes.Compare(d.parentBytes(), do.tagBytes()) == 0 {
+		if bytes.Equal(d.parentBytes(), do.tagBytes()) {
 			c = append(c, d)
 		}
 	}

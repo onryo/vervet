@@ -4,18 +4,12 @@ import (
 	"bytes"
 	"encoding/binary"
 	"errors"
-	"fmt"
 	"strings"
 
 	"github.com/ebfe/scard"
 )
 
 // YubiKeys represents the system context and slice of connected smart cards
-
-const (
-	pinMin int = 6
-	pinMax int = 127
-)
 
 const (
 	AlgoIdRSA   uint8 = 1
@@ -26,6 +20,7 @@ const (
 type YubiKey struct {
 	Context         *scard.Context
 	Card            *scard.Card
+	ReaderLabel     string
 	CardRelatedData CardRelatedData
 	AppRelatedData  AppRelatedData
 }
@@ -305,14 +300,12 @@ func (yk *YubiKey) Connect() error {
 
 	if len(yks) > 0 {
 		// wait for card
-		fmt.Println("\u23F3 Waiting for a Yubico YubiKey")
 		i, err := waitUntilCardPresent(ctx, yks)
 		if err != nil {
 			return err
 		}
 
 		// Connect to card
-		fmt.Println("\u26A1 Connecting to", yks[i])
 		card, err := ctx.Connect(yks[i], scard.ShareExclusive, scard.ProtocolAny)
 		if err != nil {
 			return err
@@ -320,6 +313,7 @@ func (yk *YubiKey) Connect() error {
 
 		// if card supports OpenPGP applet, select application, and add it to cards
 		if err = SelectApp(card); err == nil {
+			yk.ReaderLabel = yks[i]
 			yk.Card = card
 		}
 
@@ -332,7 +326,7 @@ func (yk *YubiKey) Connect() error {
 			return err
 		}
 	} else {
-		return errors.New("No YubiKeys found")
+		return errors.New("no YubiKeys found")
 	}
 
 	return nil
