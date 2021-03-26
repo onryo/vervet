@@ -27,14 +27,39 @@ func VaultUnseal(vaultAddr string, unsealKey string) error {
 		return err
 	}
 
-	VaultPrintSealStatus(vaultURL, sealStatusRsp)
+	fmt.Printf("Vault server: %s\n", vaultURL.Host)
+	VaultPrintSealStatus(sealStatusRsp)
 
 	return nil
 }
 
-func VaultPrintSealStatus(url *url.URL, resp *api.SealStatusResponse) {
-	fmt.Printf("Vault server: %s\n", url.Host)
+// connect to Vault server and execute unseal operation
+func VaultGenerateRoot(vaultAddr string, unsealKey string, nonce string) error {
+	vaultURL, err := url.Parse(vaultAddr)
+	if err != nil {
+		return err
+	}
 
+	config := &api.Config{
+		Address: vaultAddr,
+	}
+	client, err := api.NewClient(config)
+	if err != nil {
+		return err
+	}
+
+	genRootStatusRsp, err := client.Sys().GenerateRootUpdate(unsealKey, nonce)
+	if err != nil {
+		return err
+	}
+
+	fmt.Printf("Vault server: %s\n", vaultURL.Host)
+	VaultPrintGenRootStatus(genRootStatusRsp)
+
+	return nil
+}
+
+func VaultPrintSealStatus(resp *api.SealStatusResponse) {
 	status := "unsealed"
 	if resp.Sealed {
 		status = "sealed"
@@ -44,12 +69,32 @@ func VaultPrintSealStatus(url *url.URL, resp *api.SealStatusResponse) {
 	}
 
 	if resp.Initialized {
-		fmt.Printf("Seal Status: %s\n", status)
-		fmt.Printf("Key Threshold/Shares: %d/%d\n", resp.T, resp.N)
+		fmt.Printf("Seal status: %s\n", status)
+		fmt.Printf("Key threshold/shares: %d/%d\n", resp.T, resp.N)
 		fmt.Printf("Progress: %d/%d\n", resp.Progress, resp.T)
 		fmt.Printf("Version: %s\n", resp.Version)
 
 	} else {
 		fmt.Println("Vault server is not initialized.")
+	}
+}
+
+func VaultPrintGenRootStatus(resp *api.GenerateRootStatusResponse) {
+	status := "not started"
+	if resp.Started {
+		status = "started"
+
+		if resp.Complete {
+			status = "complete"
+		}
+	}
+
+	fmt.Printf("Root generation: %s\n", status)
+	fmt.Printf("Nonce: %s\n", resp.Nonce)
+	fmt.Printf("Progress: %d/%d\n", resp.Progress, resp.Required)
+	fmt.Printf("PGP fingerprint: %s\n", resp.PGPFingerprint)
+
+	if resp.EncodedRootToken != "" {
+		fmt.Printf("Encoded root token: %s\n", resp.EncodedRootToken)
 	}
 }

@@ -14,9 +14,10 @@ var (
 	config     VervetConfig
 	configFile string
 
-	unsealKeyFileBinary bool
-	vaultPort           int
-	vaultTLSDisable     bool
+	vaultPort              int
+	vaultTLSDisable        bool
+	unsealKeyFileBinary    bool
+	vaultGenerateRootNonce string
 
 	rootCmd = &cobra.Command{
 		Use:   "vervet",

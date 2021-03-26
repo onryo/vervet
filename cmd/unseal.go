@@ -10,12 +10,12 @@ import (
 )
 
 func init() {
-	serverSubCmd.Flags().IntVarP(&vaultPort, "port", "p", 8200, "Vault API port")
-	serverSubCmd.Flags().BoolVarP(&vaultTLSDisable, "no-tls", "n", false, "disable TLS")
-	serverSubCmd.Flags().BoolVarP(&unsealKeyFileBinary, "binary", "b", false, "read encrypted unseal key file as binary data")
+	unsealServerSubCmd.Flags().IntVarP(&vaultPort, "port", "p", 8200, "Vault API port")
+	unsealServerSubCmd.Flags().BoolVarP(&vaultTLSDisable, "insecure", "i", false, "disable TLS")
+	unsealServerSubCmd.Flags().BoolVarP(&unsealKeyFileBinary, "binary", "b", false, "read encrypted unseal key file as binary data")
 
-	unsealCmd.AddCommand(serverSubCmd)
-	unsealCmd.AddCommand(clusterSubCmd)
+	unsealCmd.AddCommand(unsealServerSubCmd)
+	unsealCmd.AddCommand(unsealClusterSubCmd)
 
 	rootCmd.AddCommand(unsealCmd)
 
@@ -27,7 +27,7 @@ var unsealCmd = &cobra.Command{
 	Long:  `Decrypt the unseal key and attempt to unseal Vault.`,
 }
 
-var serverSubCmd = &cobra.Command{
+var unsealServerSubCmd = &cobra.Command{
 	Use:   "server <vault address> <unseal key>",
 	Short: "Unseal Vault server",
 	Long:  `Decrypt unseal key and attempt to unseal Vault server.`,
@@ -55,7 +55,7 @@ var serverSubCmd = &cobra.Command{
 	},
 }
 
-var clusterSubCmd = &cobra.Command{
+var unsealClusterSubCmd = &cobra.Command{
 	Use:   "cluster <cluster name>",
 	Short: "Unseal Vault cluster",
 	Long:  `Decrypt unseal key and attempt to unseal Vault cluster.`,
