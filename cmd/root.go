@@ -44,8 +44,7 @@ func Execute() error {
 func init() {
 	cobra.OnInitialize(initConfig)
 
-	rootCmd.PersistentFlags().StringVar(&configFile, "config", "", "config file (default is $HOME/.cobra.yaml)")
-	rootCmd.PersistentFlags().Bool("viper", true, "use Viper for configuration")
+	rootCmd.PersistentFlags().StringVar(&configFile, "config", "", "config file (default is $HOME/.vervet/vervet.hcl)")
 
 	// viper.BindPFlag("author", rootCmd.PersistentFlags().Lookup("author"))
 	// viper.BindPFlag("useViper", rootCmd.PersistentFlags().Lookup("viper"))
