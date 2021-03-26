@@ -3,6 +3,7 @@ package cmd
 import (
 	"encoding/base64"
 	"fmt"
+	"log"
 	"vervet/vervet"
 
 	"github.com/spf13/cobra"
@@ -37,22 +38,19 @@ var serverSubCmd = &cobra.Command{
 
 		unsealKeyMsg, err := vervet.ReadUnsealKeyFile(unsealKeyPath, unsealKeyFileBinary)
 		if err != nil {
-			fmt.Println("\U0001F6D1", err)
-			return
+			log.Fatal(err)
 		}
 
 		unsealKey, err := vervet.DecryptUnsealKey(unsealKeyMsg)
 		if err != nil {
-			fmt.Println("\U0001F6D1", err)
-			return
+			log.Fatal(err)
 		}
 
 		vaultAddr := getVaultAddress(server)
 
 		err = vervet.UnsealVault(vaultAddr, unsealKey)
 		if err != nil {
-			fmt.Println("\U0001F6D1", err)
-			return
+			log.Fatal(err)
 		}
 	},
 }
@@ -75,19 +73,17 @@ var clusterSubCmd = &cobra.Command{
 			for _, keyB64 := range cluster.Keys {
 				key, err := base64.StdEncoding.DecodeString(keyB64)
 				if err != nil {
-					fmt.Println("encrypted unseal key file is not base64 encoded, use -b for binary PGP data")
+					log.Fatal("encrypted unseal key file is not base64 encoded, use -b for binary PGP data")
 				}
 
 				unsealKey, err := vervet.DecryptUnsealKey(key)
 				if err != nil {
-					fmt.Println("\U0001F6D1", err)
-					return
+					log.Fatal(err)
 				}
 
 				err = vervet.UnsealVault(server, unsealKey)
 				if err != nil {
-					fmt.Println("\U0001F6D1", err)
-					return
+					log.Fatal(err)
 				}
 			}
 		}

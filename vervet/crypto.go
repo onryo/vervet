@@ -25,7 +25,6 @@ func DecryptUnsealKey(cipherTxt []byte) (string, error) {
 		return "", err
 	}
 
-	fmt.Printf("\U0001F511 Decrypted Vault unseal key: %s\n", unsealKey)
 	return string(unsealKey), nil
 }
 
@@ -36,7 +35,7 @@ func promptPIN() ([]byte, error) {
 		return []byte{}, err
 	}
 
-	fmt.Println()
+	fmt.Printf("\n\n")
 
 	if len(p) < 6 || len(p) > 127 {
 		return []byte{}, errors.New("expected PIN length of 6-127 characters")

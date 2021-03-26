@@ -21,7 +21,7 @@ func Decipher(card *scard.Card, data []byte) ([]byte, error) {
 	}
 
 	if len(data)%16 != 0 {
-		return nil, errors.New("Decipher input blocks should be in multiples of 16 bytes")
+		return nil, errors.New("decipher input blocks should be in multiples of 16 bytes")
 	}
 
 	ra, err := ca.transmit(card)
@@ -30,7 +30,7 @@ func Decipher(card *scard.Card, data []byte) ([]byte, error) {
 	}
 
 	if !ra.checkSuccess() {
-		return nil, errors.New("Decipher operation unsuccessful")
+		return nil, errors.New("decipher operation unsuccessful")
 	}
 
 	return ra.data, nil
@@ -71,7 +71,7 @@ func GetData(card *scard.Card, do DataObject) ([]byte, error) {
 
 			data = append(data, ra.data...)
 		} else {
-			return nil, errors.New("An error occurred, could not get data segment")
+			return nil, errors.New("error occurred, could not get data segment")
 		}
 	}
 
@@ -88,15 +88,13 @@ func SelectApp(card *scard.Card) error {
 		le:   0,
 	}
 
-	fmt.Println("\U0001F4E6 Selecting OpenPGP application")
-
 	ra, err := ca.transmit(card)
 	if err != nil {
 		return err
 	}
 
 	if !ra.checkSuccess() {
-		return errors.New("This YubiKey does not support OpenPGP")
+		return errors.New("this YubiKey does not support OpenPGP")
 	}
 
 	return nil
@@ -112,8 +110,6 @@ func Verify(card *scard.Card, pin []byte) error {
 		data: pin,
 		le:   0,
 	}
-
-	fmt.Println("\U0001F522 Verifying card PIN")
 
 	ra, err := ca.transmit(card)
 	if err != nil {
@@ -131,7 +127,7 @@ func Verify(card *scard.Card, pin []byte) error {
 			verb = "retries"
 		}
 
-		return fmt.Errorf("Invalid PIN, %d %s remaining", retries, verb)
+		return fmt.Errorf("invalid PIN, %d %s remaining", retries, verb)
 	}
 
 	return nil

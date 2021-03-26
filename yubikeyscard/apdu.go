@@ -116,5 +116,5 @@ func (ra *responseAPDU) checkSuccess() bool {
 	success := []byte{0x90, 0x00}
 	status := []byte{ra.sw1, ra.sw2}
 
-	return bytes.Compare(status, success) == 0
+	return bytes.Equal(status, success)
 }

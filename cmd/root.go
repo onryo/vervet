@@ -45,9 +45,6 @@ func init() {
 	cobra.OnInitialize(initConfig)
 
 	rootCmd.PersistentFlags().StringVar(&configFile, "config", "", "config file (default is $HOME/.vervet/vervet.hcl)")
-
-	// viper.BindPFlag("author", rootCmd.PersistentFlags().Lookup("author"))
-	// viper.BindPFlag("useViper", rootCmd.PersistentFlags().Lookup("viper"))
 }
 
 func initConfig() {
@@ -65,11 +62,8 @@ func initConfig() {
 		viper.SetConfigType("hcl")
 	}
 
-	// viper.AutomaticEnv()
-
-	if err := viper.ReadInConfig(); err == nil {
-		fmt.Println("Using config file:", viper.ConfigFileUsed())
-	}
+	viper.AutomaticEnv()
+	viper.ReadInConfig()
 
 	err := viper.Unmarshal(&config)
 	if err != nil {
@@ -84,7 +78,7 @@ func getVaultClusterConfig(clusterName string) (*VaultClusterConfig, error) {
 		}
 	}
 
-	return nil, fmt.Errorf("\U0001F6D1 config for Vault cluster '%s' not found", clusterName)
+	return nil, fmt.Errorf("config for Vault cluster '%s' not found", clusterName)
 }
 
 func getVaultAddress(host string) string {

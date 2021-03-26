@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"log"
 	"vervet/vervet"
 
 	"github.com/spf13/cobra"
@@ -10,13 +11,11 @@ var listCmd = &cobra.Command{
 	Use:   "list",
 	Short: "List info of connected YubiKeys",
 	Long:  `Shows data objects returned from OpenPGP Application of YubiKey. `,
-	RunE: func(cmd *cobra.Command, args []string) error {
+	Run: func(cmd *cobra.Command, args []string) {
 		err := vervet.PrintYubiKeyInfo()
 		if err != nil {
-			return err
+			log.Fatal(err)
 		}
-
-		return nil
 	},
 }
 
