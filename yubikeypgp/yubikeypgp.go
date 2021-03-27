@@ -13,8 +13,8 @@ import (
 
 const (
 	sessionKeyLength                = 16
-	unsealKeyLengthMin              = 32
-	unsealKeyLengthMax              = 66
+	unsealKeyLengthMin              = 16
+	unsealKeyLengthMax              = 33
 	encryptedKeyPacketHeaderLength  = 3
 	encryptedKeyPacketKeyInfoLength = 12
 	symmetricallyEncryptedVersion   = 1
@@ -80,10 +80,11 @@ func ReadUnsealKey(yk *yubikeyscard.YubiKey, msg []byte, prompt PinPromptFunctio
 		return nil, err
 	}
 
-	if len(unsealKey) < unsealKeyLengthMin {
+	// unsealKey is a byte slice of unicode characters, divide length by 2 to get raw byte length
+	if len(unsealKey)/2 < unsealKeyLengthMin {
 		return nil, fmt.Errorf("unseal key length is shorter than minimum %d bytes", unsealKeyLengthMin)
 	}
-	if len(unsealKey) > unsealKeyLengthMax {
+	if len(unsealKey)/2 > unsealKeyLengthMax {
 		return nil, fmt.Errorf("unseal key length is longer than maximum %d bytes", unsealKeyLengthMax)
 	}
 
