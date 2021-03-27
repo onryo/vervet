@@ -16,8 +16,8 @@ var (
 
 	vaultPort              int
 	vaultTLSDisable        bool
-	unsealKeyFileBinary    bool
 	vaultGenerateRootNonce string
+	keyFileBinary          bool
 
 	rootCmd = &cobra.Command{
 		Use:   "vervet",

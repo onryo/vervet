@@ -1,6 +1,7 @@
 package vervet
 
 import (
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"syscall"
@@ -10,24 +11,47 @@ import (
 	"golang.org/x/term"
 )
 
-func YubiKeyDecrypt(cipherTxt []byte) (string, error) {
-	// connect YubiKey smart card interface, disconnect on return
-	yk := new(yubikeyscard.YubiKey)
-	if err := yk.Connect(); err != nil {
-		return "", err
+// decryptUnsealKey decrypts a base64-encoded PGP-encrypted Vault unseal key.
+func decryptUnsealKey(yk *yubikeyscard.YubiKey, encryptedKeyB64 string) (string, error) {
+	encryptedKey, err := base64.StdEncoding.DecodeString(encryptedKeyB64)
+	if err != nil {
+		return "", errors.New("encrypted unseal key is not base64 encoded")
 	}
 
-	defer yk.Disconnect()
-
-	// decrypt unseal key with DEK
-	unsealKey, err := yubikeypgp.ReadUnsealKey(yk, cipherTxt, promptPIN)
+	decryptedKey, err := yubikeypgp.Decrypt(yk, encryptedKey, promptPIN)
 	if err != nil {
 		return "", err
 	}
 
-	return string(unsealKey), nil
+	return string(decryptedKey), nil
 }
 
+// decryptUnsealKey reads a PGP-encrypted Vault unseal key file and decrypts the key.
+func decryptUnsealKeyFromFile(yk *yubikeyscard.YubiKey, encryptedKeyPath string, binary bool) (string, error) {
+	contents, err := readFile(encryptedKeyPath)
+	if err != nil {
+		return "", err
+	}
+
+	var encryptedKey []byte
+	if !binary {
+		encryptedKey, err = base64.StdEncoding.DecodeString(fmt.Sprintf("%s", contents))
+		if err != nil {
+			return "", errors.New("encrypted unseal key file is not base64 encoded")
+		}
+	} else {
+		encryptedKey = contents
+	}
+
+	decryptedKey, err := yubikeypgp.Decrypt(yk, encryptedKey, promptPIN)
+	if err != nil {
+		return "", err
+	}
+
+	return string(decryptedKey), nil
+}
+
+// promptPin will read a PIN from an interactive terminal.
 func promptPIN() ([]byte, error) {
 	fmt.Print("\U0001F513 Enter YubiKey OpenPGP PIN: ")
 	p, err := term.ReadPassword(int(syscall.Stdin))

@@ -8,7 +8,7 @@ import (
 )
 
 // connect to Vault server and execute unseal operation
-func VaultUnseal(vaultAddr string, unsealKey string) error {
+func vaultUnseal(vaultAddr string, unsealKey string) error {
 	vaultURL, err := url.Parse(vaultAddr)
 	if err != nil {
 		return err
@@ -28,13 +28,13 @@ func VaultUnseal(vaultAddr string, unsealKey string) error {
 	}
 
 	fmt.Printf("Vault server: %s\n", vaultURL.Host)
-	VaultPrintSealStatus(sealStatusRsp)
+	vaultPrintSealStatus(sealStatusRsp)
 
 	return nil
 }
 
 // connect to Vault server and execute unseal operation
-func VaultGenerateRoot(vaultAddr string, unsealKey string, nonce string) error {
+func vaultGenerateRoot(vaultAddr string, unsealKey string, nonce string) error {
 	vaultURL, err := url.Parse(vaultAddr)
 	if err != nil {
 		return err
@@ -54,12 +54,12 @@ func VaultGenerateRoot(vaultAddr string, unsealKey string, nonce string) error {
 	}
 
 	fmt.Printf("Vault server: %s\n", vaultURL.Host)
-	VaultPrintGenRootStatus(genRootStatusRsp)
+	vaultPrintGenRootStatus(genRootStatusRsp)
 
 	return nil
 }
 
-func VaultPrintSealStatus(resp *api.SealStatusResponse) {
+func vaultPrintSealStatus(resp *api.SealStatusResponse) {
 	status := "unsealed"
 	if resp.Sealed {
 		status = "sealed"
@@ -79,7 +79,7 @@ func VaultPrintSealStatus(resp *api.SealStatusResponse) {
 	}
 }
 
-func VaultPrintGenRootStatus(resp *api.GenerateRootStatusResponse) {
+func vaultPrintGenRootStatus(resp *api.GenerateRootStatusResponse) {
 	status := "not started"
 	if resp.Started {
 		status = "started"

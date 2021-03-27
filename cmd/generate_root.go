@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"encoding/base64"
 	"log"
 	"vervet/vervet"
 
@@ -34,23 +33,10 @@ var generateRootServerSubCmd = &cobra.Command{
 	Long:  `Decrypt the unseal key and generate Vault root token.`,
 	Args:  cobra.ExactArgs(2),
 	Run: func(cmd *cobra.Command, args []string) {
-		server := args[0]
-		generateRootKeyPath := args[1]
+		vaultAddr := getVaultAddress(args[0])
+		keyPath := args[1]
 
-		generateRootKeyMsg, err := vervet.ReadVaultUnsealKeyFile(generateRootKeyPath, unsealKeyFileBinary)
-		if err != nil {
-			log.Fatal(err)
-		}
-
-		unsealKey, err := vervet.YubiKeyDecrypt(generateRootKeyMsg)
-		if err != nil {
-			log.Fatal(err)
-		}
-
-		vaultAddr := getVaultAddress(server)
-
-		err = vervet.VaultGenerateRoot(vaultAddr, unsealKey, vaultGenerateRootNonce)
-		if err != nil {
+		if err := vervet.GenerateRootServer(vaultAddr, keyPath, keyFileBinary, vaultGenerateRootNonce); err != nil {
 			log.Fatal(err)
 		}
 	},
@@ -69,24 +55,8 @@ var generateRootClusterSubCmd = &cobra.Command{
 			log.Fatal(err)
 		}
 
-		for _, server := range cluster.Servers {
-			for _, keyB64 := range cluster.Keys {
-				key, err := base64.StdEncoding.DecodeString(keyB64)
-				if err != nil {
-					log.Fatal("encrypted generateRoot key file is not base64 encoded, use -b for binary PGP data")
-				}
-
-				generateRootKey, err := vervet.YubiKeyDecrypt(key)
-				if err != nil {
-					log.Fatal(err)
-				}
-
-				err = vervet.VaultGenerateRoot(server, generateRootKey, vaultGenerateRootNonce)
-				if err != nil {
-					// if there is an issue, break the loop, and move to next server
-					break
-				}
-			}
+		if err := vervet.GenerateRootCluster(cluster.Servers, cluster.Keys, vaultGenerateRootNonce); err != nil {
+			log.Fatal(err)
 		}
 	},
 }

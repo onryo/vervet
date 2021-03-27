@@ -32,7 +32,10 @@ type encryptedKeyPacket struct {
 	encryptedBytes []byte
 }
 
-func ReadUnsealKey(yk *yubikeyscard.YubiKey, msg []byte, prompt PinPromptFunction) ([]byte, error) {
+// Decrypt will decrypt a PGP-encrypted message by using a YubiKey to first
+// obtain the session key (DEK). Decrypt will then decrypt the symmetrically
+// encrypted portion of the message and return the resultant plain text.
+func Decrypt(yk *yubikeyscard.YubiKey, msg []byte, prompt PinPromptFunction) ([]byte, error) {
 	// read encrypted key packet fields and deserialize to struct
 	ek, err := readEncKeyPacket(bytes.NewReader(msg))
 	if err != nil {

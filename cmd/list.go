@@ -12,7 +12,7 @@ var listCmd = &cobra.Command{
 	Short: "List info of connected YubiKeys",
 	Long:  `Shows data objects returned from YubiKey OpenPGP Application.`,
 	Run: func(cmd *cobra.Command, args []string) {
-		err := vervet.YubiKeyPrintInfo()
+		err := vervet.ListYubiKeys()
 		if err != nil {
 			log.Fatal(err)
 		}
