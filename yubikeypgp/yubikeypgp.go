@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"io"
 	"vervet/yubikeyscard"
 
@@ -12,7 +13,8 @@ import (
 
 const (
 	sessionKeyLength                = 16
-	unsealKeyLength                 = 32
+	unsealKeyLengthMin              = 32
+	unsealKeyLengthMax              = 66
 	encryptedKeyPacketHeaderLength  = 3
 	encryptedKeyPacketKeyInfoLength = 12
 	symmetricallyEncryptedVersion   = 1
@@ -78,8 +80,11 @@ func ReadUnsealKey(yk *yubikeyscard.YubiKey, msg []byte, prompt PinPromptFunctio
 		return nil, err
 	}
 
-	if len(unsealKey) != 64 {
-		return nil, errors.New("invalid Vault unseal key length, expected 32 bytes")
+	if len(unsealKey) < unsealKeyLengthMin {
+		return nil, fmt.Errorf("unseal key length is shorter than minimum %d bytes", unsealKeyLengthMin)
+	}
+	if len(unsealKey) > unsealKeyLengthMax {
+		return nil, fmt.Errorf("unseal key length is longer than maximum %d bytes", unsealKeyLengthMax)
 	}
 
 	return unsealKey, nil
