@@ -44,15 +44,22 @@ func ReadUnsealKey(yk *yubikeyscard.YubiKey, msg []byte, prompt PinPromptFunctio
 		return nil, errors.New("decryption key could not be found on YubiKey")
 	}
 
-	// retrieve PIN input from user and validate the format and length
-	pin, err := prompt()
-	if err != nil {
-		return nil, err
+	// check if PIN is cached, if not retrieve PIN input from user, then validate format
+	pin := yk.GetCachedPIN(2)
+
+	if pin == nil {
+		pin, err = prompt()
+		if err != nil {
+			return nil, err
+		}
 	}
 
-	// verify the PIN with the OpenPGP smart card applet
-	if err = yubikeyscard.Verify(yk.Card, pin); err != nil {
+	// verify the PIN (bank 2) with the OpenPGP smart card applet
+	if err = yubikeyscard.Verify(yk.Card, 2, pin); err != nil {
 		return nil, err
+	} else {
+		// add verified PIN to the cache
+		yk.SetCachedPIN(2, pin)
 	}
 
 	// decipher the session key

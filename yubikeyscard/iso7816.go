@@ -100,15 +100,19 @@ func SelectApp(card *scard.Card) error {
 	return nil
 }
 
-// Verify PIN to allow access to restricted operations, prompt if PIN empty
-func Verify(card *scard.Card, pin []byte) error {
+// Verify is used to check the PIN for the provided bank and set appropriate access.
+func Verify(card *scard.Card, bank uint8, pin []byte) error {
 	ca := commandAPDU{
 		cla:  0,
 		ins:  0x20,
 		p1:   0,
-		p2:   0x82,
+		p2:   0x80 + bank,
 		data: pin,
 		le:   0,
+	}
+
+	if bank < 1 || bank > 3 {
+		return errors.New("invalid PIN bank, use banks 1-3")
 	}
 
 	ra, err := ca.transmit(card)

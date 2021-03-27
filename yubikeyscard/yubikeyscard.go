@@ -23,6 +23,7 @@ type YubiKey struct {
 	ReaderLabel     string
 	CardRelatedData CardRelatedData
 	AppRelatedData  AppRelatedData
+	PINCache        [3][]byte
 }
 
 type CardRelatedData struct {
@@ -347,5 +348,25 @@ func (yk *YubiKey) Disconnect() error {
 		return err
 	}
 
+	return nil
+}
+
+// GetCachedPIN returns the cached PIN for the provided bank if available. If PIN is not
+// cached, GetCachedPIN will return nil.
+func (yk *YubiKey) GetCachedPIN(bank uint8) []byte {
+	if bank < 1 || bank > 3 {
+		return nil
+	}
+
+	return yk.PINCache[bank-1]
+}
+
+// SetCachedPIN adds a verified PIN to the cache.
+func (yk *YubiKey) SetCachedPIN(bank uint8, pin []byte) error {
+	if bank < 1 || bank > 3 {
+		return errors.New("invalid PIN bank, use banks 1-3")
+	}
+
+	yk.PINCache[bank-1] = pin
 	return nil
 }
