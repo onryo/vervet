@@ -10,7 +10,6 @@ import (
 func init() {
 	unsealServerSubCmd.Flags().IntVarP(&vaultPort, "port", "p", 8200, "Vault API port")
 	unsealServerSubCmd.Flags().BoolVarP(&vaultTLSDisable, "insecure", "i", false, "disable TLS")
-	unsealServerSubCmd.Flags().BoolVarP(&keyFileBinary, "binary", "b", false, "read encrypted unseal key file as binary data (default: base64)")
 
 	unsealCmd.AddCommand(unsealServerSubCmd)
 	unsealCmd.AddCommand(unsealClusterSubCmd)
@@ -34,7 +33,12 @@ var unsealServerSubCmd = &cobra.Command{
 		vaultAddr := getVaultAddress(args[0])
 		keyPath := args[1]
 
-		if err := vervet.UnsealServer(vaultAddr, keyPath, keyFileBinary); err != nil {
+		keys, err := vervet.ReadKeyFile(keyPath)
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		if err := vervet.Unseal([]string{vaultAddr}, keys); err != nil {
 			log.Fatal(err)
 		}
 	},
@@ -53,7 +57,7 @@ var unsealClusterSubCmd = &cobra.Command{
 			log.Fatal(err)
 		}
 
-		if err := vervet.UnsealCluster(cluster.Servers, cluster.Keys); err != nil {
+		if err := vervet.Unseal(cluster.Servers, cluster.Keys); err != nil {
 			log.Fatal(err)
 		}
 	},

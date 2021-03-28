@@ -26,31 +26,6 @@ func decryptUnsealKey(yk *yubikeyscard.YubiKey, encryptedKeyB64 string) (string,
 	return string(decryptedKey), nil
 }
 
-// decryptUnsealKey reads a PGP-encrypted Vault unseal key file and decrypts the key.
-func decryptUnsealKeyFromFile(yk *yubikeyscard.YubiKey, encryptedKeyPath string, binary bool) (string, error) {
-	contents, err := readFile(encryptedKeyPath)
-	if err != nil {
-		return "", err
-	}
-
-	var encryptedKey []byte
-	if !binary {
-		encryptedKey, err = base64.StdEncoding.DecodeString(fmt.Sprintf("%s", contents))
-		if err != nil {
-			return "", errors.New("encrypted unseal key file is not base64 encoded")
-		}
-	} else {
-		encryptedKey = contents
-	}
-
-	decryptedKey, err := yubikeypgp.Decrypt(yk, encryptedKey, promptPIN)
-	if err != nil {
-		return "", err
-	}
-
-	return string(decryptedKey), nil
-}
-
 // promptPin will read a PIN from an interactive terminal.
 func promptPIN() ([]byte, error) {
 	fmt.Print("\U0001F513 Enter YubiKey OpenPGP PIN: ")

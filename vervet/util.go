@@ -7,10 +7,20 @@ import (
 	"strings"
 )
 
-const maxKeyFileSize int64 = 8192
+const keyFileSizeMax int64 = 8192
 
-//
-func readFile(path string) ([]byte, error) {
+func ReadKeyFile(path string) ([]string, error) {
+	buf, err := readFile(path, keyFileSizeMax)
+	if err != nil {
+		return nil, err
+	}
+
+	return strings.Split(strings.TrimSpace(string(buf)), "\n"), nil
+}
+
+// readFile will read a file from the provide path up to the byte length
+// limit provided.
+func readFile(path string, maxBytes int64) ([]byte, error) {
 	var buf []byte
 
 	file, err := os.Open(path)
@@ -25,8 +35,8 @@ func readFile(path string) ([]byte, error) {
 		return nil, err
 	}
 
-	if fileStat.Size() > maxKeyFileSize {
-		return nil, fmt.Errorf("unseal key is larger that the maximum file size of %d bytes", maxKeyFileSize)
+	if fileStat.Size() > maxBytes {
+		return nil, fmt.Errorf("unseal key is larger that the maximum file size of %d bytes", maxBytes)
 	}
 
 	buf, err = io.ReadAll(file)

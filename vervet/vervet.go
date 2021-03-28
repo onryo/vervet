@@ -9,32 +9,9 @@ import (
 	"vervet/yubikeyscard"
 )
 
-// UnsealServer will decrypt the provided unseal key and unseal an individual
-// Vault server.
-func UnsealServer(vaultAddr, keyPath string, keyBinary bool) error {
-	yk := new(yubikeyscard.YubiKey)
-	if err := yk.Connect(); err != nil {
-		return err
-	}
-
-	defer yk.Disconnect()
-
-	key, err := decryptUnsealKeyFromFile(yk, keyPath, keyBinary)
-	if err != nil {
-		return err
-	}
-
-	err = vaultUnseal(vaultAddr, key)
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
-// UnsealCluster will decrypt the provided unseal key(s) and unseal each of the
-// Vault cluster nodes.
-func UnsealCluster(vaultAddrs []string, keys []string) error {
+// Unseal will decrypt the provided unseal key(s) and unseal each of the
+// provided Vault cluster nodes.
+func Unseal(vaultAddrs []string, keys []string) error {
 	yk := new(yubikeyscard.YubiKey)
 	if err := yk.Connect(); err != nil {
 		return err
@@ -49,40 +26,21 @@ func UnsealCluster(vaultAddrs []string, keys []string) error {
 				return err
 			}
 
-			err = vaultUnseal(vaultAddr, key)
+			resp, err := vaultUnseal(vaultAddr, key)
 			if err != nil {
 				return err
 			}
+
+			vaultPrintSealStatus(resp)
 		}
 	}
 
 	return nil
 }
 
-// UnsealServer will decrypt the provided unseal key and enter the key share
-// to progress the root generation attempt
-func GenerateRootServer(vaultAddr, keyPath string, keyBinary bool, nonce string) error {
-	yk := new(yubikeyscard.YubiKey)
-	if err := yk.Connect(); err != nil {
-		return err
-	}
-
-	defer yk.Disconnect()
-
-	key, err := decryptUnsealKeyFromFile(yk, keyPath, keyBinary)
-	if err != nil {
-		return err
-	}
-
-	err = vaultGenerateRoot(vaultAddr, key, nonce)
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func GenerateRootCluster(vaultAddrs []string, keys []string, nonce string) error {
+// GenerateRoot will decrypt the provided unseal key and enter the key share
+// to progress the root generation attempt.
+func GenerateRoot(vaultAddrs []string, keys []string, nonce string) error {
 	yk := new(yubikeyscard.YubiKey)
 	if err := yk.Connect(); err != nil {
 		return err

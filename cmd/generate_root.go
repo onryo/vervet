@@ -36,7 +36,12 @@ var generateRootServerSubCmd = &cobra.Command{
 		vaultAddr := getVaultAddress(args[0])
 		keyPath := args[1]
 
-		if err := vervet.GenerateRootServer(vaultAddr, keyPath, keyFileBinary, vaultGenerateRootNonce); err != nil {
+		keys, err := vervet.ReadKeyFile(keyPath)
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		if err := vervet.GenerateRoot([]string{vaultAddr}, keys, vaultGenerateRootNonce); err != nil {
 			log.Fatal(err)
 		}
 	},
@@ -55,7 +60,7 @@ var generateRootClusterSubCmd = &cobra.Command{
 			log.Fatal(err)
 		}
 
-		if err := vervet.GenerateRootCluster(cluster.Servers, cluster.Keys, vaultGenerateRootNonce); err != nil {
+		if err := vervet.GenerateRoot(cluster.Servers, cluster.Keys, vaultGenerateRootNonce); err != nil {
 			log.Fatal(err)
 		}
 	},

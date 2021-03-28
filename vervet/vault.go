@@ -8,10 +8,10 @@ import (
 )
 
 // connect to Vault server and execute unseal operation
-func vaultUnseal(vaultAddr string, unsealKey string) error {
+func vaultUnseal(vaultAddr string, unsealKey string) (*api.SealStatusResponse, error) {
 	vaultURL, err := url.Parse(vaultAddr)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	config := &api.Config{
@@ -19,18 +19,17 @@ func vaultUnseal(vaultAddr string, unsealKey string) error {
 	}
 	client, err := api.NewClient(config)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	sealStatusRsp, err := client.Sys().Unseal(unsealKey)
+	resp, err := client.Sys().Unseal(unsealKey)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	fmt.Printf("Vault server: %s\n", vaultURL.Host)
-	vaultPrintSealStatus(sealStatusRsp)
+	fmt.Printf("%s: successfully provided unseal key share (progress: %d/%d)\n", vaultURL.Host, resp.Progress, resp.T)
 
-	return nil
+	return resp, nil
 }
 
 // connect to Vault server and execute unseal operation
