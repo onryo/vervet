@@ -11,7 +11,8 @@ import (
 	"golang.org/x/term"
 )
 
-// decryptUnsealKey decrypts a base64-encoded PGP-encrypted Vault unseal key.
+// decryptUnsealKey performs a base64 decode, then decrypts a PGP-encrypted
+// Vault unseal key.
 func decryptUnsealKey(yk *yubikeyscard.YubiKey, encryptedKeyB64 string) (string, error) {
 	encryptedKey, err := base64.StdEncoding.DecodeString(encryptedKeyB64)
 	if err != nil {
