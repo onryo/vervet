@@ -12,8 +12,10 @@ import (
 	"golang.org/x/term"
 )
 
-const unsealKeyLengthMin int = 16
-const unsealKeyLengthMax int = 33
+const (
+	unsealKeyLengthMin int = 16
+	unsealKeyLengthMax int = 33
+)
 
 // decryptUnsealKey performs a base64 decode, then decrypts a PGP-encrypted
 // Vault unseal key.
