@@ -49,6 +49,26 @@ func readFile(path string, maxBytes int64) ([]byte, error) {
 	return buf, nil
 }
 
+// PrintInfo will print a formatted info message to stdout.
+func PrintInfo (msg string) {
+	fmt.Println(aurora.Blue(aurora.Bold("[info]"), msg))
+}
+
+// PrintInfo will print a formatted success message to stdout.
+func PrintSuccess () {
+	fmt.Println(aurora.Green(aurora.Bold("[success]"), msg))
+}
+
+// PrintInfo will print a formatted warning message to stdout.
+func PrintWarn () {
+	fmt.Println(aurora.Yellow(aurora.Bold("[warning]"), msg))
+}
+
+// PrintInfo will print a formatted error message to stdout.
+func PrintError () {
+	fmt.Println(aurora.Red(aurora.Bold("[error]"), msg))
+}
+
 // fmtFingerprint accepts a byte array containing a PGP fingerprint and 
 // returns a formatted string that displays the fingerprint in 2-byte 
 // hexadecimal blocks.
