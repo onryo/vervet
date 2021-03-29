@@ -11,7 +11,7 @@ import (
 
 // Unseal will decrypt the provided unseal key(s) and unseal each of the
 // provided Vault cluster nodes.
-func Unseal(vaultAddrs []string, keys []string) error {
+func Unseal(vaultAddrs []string, encKeys []string) error {
 	yk := new(yubikeyscard.YubiKey)
 	if err := yk.Connect(); err != nil {
 		return err
@@ -19,20 +19,38 @@ func Unseal(vaultAddrs []string, keys []string) error {
 
 	defer yk.Disconnect()
 
-	for _, vaultAddr := range vaultAddrs {
-		for _, keyB64 := range keys {
-			key, err := decryptUnsealKey(yk, keyB64)
-			if err != nil {
-				return err
-			}
+	var keys []string
+	for _, encKey := range encKeys {
+		key, err := decryptUnsealKey(yk, encKey)
 
-			resp, err := vaultUnseal(vaultAddr, key)
-			if err != nil {
-				return err
-			}
-
-			vaultPrintSealStatus(resp)
+		if err != nil {
+			PrintWarning(err.Error())
+		} else {
+			keys = append(keys, key)
 		}
+	}
+
+	if len(keys) > 0 {
+		msg := fmt.Sprintf("decrypted %d of %d unseal key(s)", len(keys), len(encKeys))
+		PrintSuccess(msg)
+
+		for _, addr := range vaultAddrs {
+			vault, err := newVaultClient(addr)
+			if err != nil {
+				return err
+			}
+
+			for _, key := range keys {
+				_, err = vault.unseal(key)
+				if err != nil {
+					return err
+				}
+			}
+
+			vault.printSealStatus()
+		}
+	} else {
+		return errors.New("no unseal keys found, cannot proceed with unseal operation")
 	}
 
 	return nil
@@ -48,14 +66,19 @@ func GenerateRoot(vaultAddrs []string, keys []string, nonce string) error {
 
 	defer yk.Disconnect()
 
-	for _, server := range vaultAddrs {
+	for _, addr := range vaultAddrs {
+		vault, err := newVaultClient(addr)
+		if err != nil {
+			return err
+		}
+
 		for _, keyB64 := range keys {
 			key, err := decryptUnsealKey(yk, keyB64)
 			if err != nil {
 				return err
 			}
 
-			err = vaultGenerateRoot(server, key, nonce)
+			err = vault.generateRoot(key, nonce)
 			if err != nil {
 				// if there is an issue, break the loop, and move to next server
 				break

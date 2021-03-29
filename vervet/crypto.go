@@ -8,7 +8,6 @@ import (
 	"vervet/yubikeypgp"
 	"vervet/yubikeyscard"
 
-	"github.com/logrusorgru/aurora"
 	"golang.org/x/term"
 )
 
@@ -34,8 +33,7 @@ func decryptUnsealKey(yk *yubikeyscard.YubiKey, cipherTxtB64 string) (unsealKey 
 		} 
 
 		if err != nil && retries > 0 {
-			msg := fmt.Sprintf("[error] %v", err)
-			fmt.Println(aurora.Red(msg))
+			PrintError(err.Error())
 			continue
 		}
 
@@ -54,6 +52,8 @@ func decryptUnsealKey(yk *yubikeyscard.YubiKey, cipherTxtB64 string) (unsealKey 
 		err = fmt.Errorf("unseal key length is longer than maximum %d bytes", unsealKeyLengthMax)
 		return 
 	}
+
+
 
 	return
 }
