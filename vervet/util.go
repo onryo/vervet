@@ -54,17 +54,17 @@ func PrintInfo (msg string) {
 	fmt.Println(aurora.Blue(aurora.Bold("[info]"), msg))
 }
 
-// PrintInfo will print a formatted success message to stdout.
+// PrintSuccess will print a formatted success message to stdout.
 func PrintSuccess () {
 	fmt.Println(aurora.Green(aurora.Bold("[success]"), msg))
 }
 
-// PrintInfo will print a formatted warning message to stdout.
-func PrintWarn () {
+// PrintWarning will print a formatted warning message to stdout.
+func PrintWarning () {
 	fmt.Println(aurora.Yellow(aurora.Bold("[warning]"), msg))
 }
 
-// PrintInfo will print a formatted error message to stdout.
+// PrintError will print a formatted error message to stdout.
 func PrintError () {
 	fmt.Println(aurora.Red(aurora.Bold("[error]"), msg))
 }
