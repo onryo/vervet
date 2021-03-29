@@ -5,6 +5,8 @@ import (
 	"io"
 	"os"
 	"strings"
+
+	"github.com/logrusorgru/aurora"
 )
 
 const keyFileSizeMax int64 = 8192
@@ -51,22 +53,22 @@ func readFile(path string, maxBytes int64) ([]byte, error) {
 
 // PrintInfo will print a formatted info message to stdout.
 func PrintInfo (msg string) {
-	fmt.Println(aurora.Blue(aurora.Bold("[info]"), msg))
+	fmt.Println(aurora.Blue(aurora.Bold("[info]")), msg)
 }
 
 // PrintSuccess will print a formatted success message to stdout.
-func PrintSuccess () {
-	fmt.Println(aurora.Green(aurora.Bold("[success]"), msg))
+func PrintSuccess (msg string) {
+	fmt.Println(aurora.Green(aurora.Bold("[success]")), msg)
 }
 
 // PrintWarning will print a formatted warning message to stdout.
-func PrintWarning () {
-	fmt.Println(aurora.Yellow(aurora.Bold("[warning]"), msg))
+func PrintWarning (msg string) {
+	fmt.Println(aurora.Yellow(aurora.Bold("[warning]")), msg)
 }
 
 // PrintError will print a formatted error message to stdout.
-func PrintError () {
-	fmt.Println(aurora.Red(aurora.Bold("[error]"), msg))
+func PrintError (msg string) {
+	fmt.Println(aurora.Red(aurora.Bold("[error]")), msg)
 }
 
 // fmtFingerprint accepts a byte array containing a PGP fingerprint and 
