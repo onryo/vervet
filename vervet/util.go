@@ -9,6 +9,8 @@ import (
 
 const keyFileSizeMax int64 = 8192
 
+// ReadFile will read an unseal key file from the provided path and return a 
+// slice of strings containing base64-encoded PGP-encrypted Vault unseal keys.
 func ReadKeyFile(path string) ([]string, error) {
 	buf, err := readFile(path, keyFileSizeMax)
 	if err != nil {
@@ -18,7 +20,7 @@ func ReadKeyFile(path string) ([]string, error) {
 	return strings.Split(strings.TrimSpace(string(buf)), "\n"), nil
 }
 
-// readFile will read a file from the provide path up to the byte length
+// readFile will read a file from the provided path up to the byte length
 // limit provided.
 func readFile(path string, maxBytes int64) ([]byte, error) {
 	var buf []byte
@@ -47,6 +49,9 @@ func readFile(path string, maxBytes int64) ([]byte, error) {
 	return buf, nil
 }
 
+// fmtFingerprint accepts a byte array containing a PGP fingerprint and 
+// returns a formatted string that displays the fingerprint in 2-byte 
+// hexadecimal blocks.
 func fmtFingerprint(fp [20]byte) string {
 	var fpString string
 
