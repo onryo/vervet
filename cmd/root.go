@@ -2,8 +2,8 @@ package cmd
 
 import (
 	"fmt"
-	"log"
 	"net/url"
+	"vervet/vervet"
 
 	"github.com/mitchellh/go-homedir"
 	"github.com/spf13/cobra"
@@ -66,7 +66,7 @@ func initConfig() {
 
 	err := viper.Unmarshal(&config)
 	if err != nil {
-		log.Fatalf("unable to decode into struct, %v", err)
+		vervet.PrintFatal(fmt.Sprintf("unable to decode into struct, %v", err), 1)
 	}
 }
 

@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"log"
 	"vervet/vervet"
 
 	"github.com/spf13/cobra"
@@ -14,7 +13,7 @@ var listCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		err := vervet.ListYubiKeys()
 		if err != nil {
-			log.Fatal(err)
+			vervet.PrintFatal(err.Error(), 1)
 		}
 	},
 }
