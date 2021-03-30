@@ -16,6 +16,36 @@ const (
 	unsealKeyLengthMax int = 33
 )
 
+// decryptUnsealKeys wraps decryptUnsealKey to decrypt a slice of unseal keys
+// and provide console messages.
+func decryptUnsealKeys(encryptedKeys []string) ([]string, error) {
+	yk := new(yubikeyscard.YubiKey)
+	if err := yk.Connect(); err != nil {
+		return nil, err
+	}
+
+	defer yk.Disconnect()
+
+	var keys []string
+	for _, ek := range encryptedKeys {
+		key, err := decryptUnsealKey(yk, ek)
+		if err != nil {
+			PrintWarning(err.Error())
+		} else {
+			keys = append(keys, key)
+		}
+	}
+
+	if len(keys) == 0 {
+		return nil, errors.New("no Vault unseal keys found, cannot proceed with unseal operation")
+	}
+
+	msg := fmt.Sprintf("decrypted %d Vault unseal key(s)", len(keys))
+	PrintSuccess(msg)
+
+	return keys, nil
+}
+
 // decryptUnsealKey performs a base64 decode, then decrypts a PGP-encrypted
 // Vault unseal key.
 func decryptUnsealKey(yk *yubikeyscard.YubiKey, cipherTxtB64 string) (unsealKey string, err error) {
@@ -28,32 +58,30 @@ func decryptUnsealKey(yk *yubikeyscard.YubiKey, cipherTxtB64 string) (unsealKey 
 	retries := 1
 	for retries > 0 {
 		plainTxtBytes, retries, err := yubikeypgp.Decrypt(yk, encryptedKey, promptPIN)
-		if err != nil && retries < 1 {
-			return "", errors.New("PIN bank locked, no retries remaining")
-		} 
+		if err != nil {
+			if retries == 0 {
+				return "", errors.New("PIN bank locked, no retries remaining")
+			}
 
-		if err != nil && retries > 0 {
 			PrintError(err.Error())
 			continue
 		}
 
 		unsealKey = string(plainTxtBytes)
 		break
-		
+
 	}
 
 	// unsealKey is a byte slice of unicode characters, divide length by 2 to get raw byte length
-	n := len(unsealKey)/2
-	if  n < unsealKeyLengthMin {
+	n := len(unsealKey) / 2
+	if n < unsealKeyLengthMin {
 		err = fmt.Errorf("unseal key length is shorter than minimum %d bytes", unsealKeyLengthMin)
-		return 
+		return
 	}
 	if n > unsealKeyLengthMax {
 		err = fmt.Errorf("unseal key length is longer than maximum %d bytes", unsealKeyLengthMax)
-		return 
+		return
 	}
-
-
 
 	return
 }

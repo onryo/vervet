@@ -100,8 +100,10 @@ func SelectApp(card *scard.Card) error {
 	return nil
 }
 
-// Verify is used to check the PIN for the provided bank and set appropriate access.
-// Verify will return the number of tries remaining
+// Verify is used to check the PIN for the provided bank and set appropriate
+// access. Verify will return the number of tries remaining. If an error other
+// than an invalid PIN occurs, -1 will be returned for the number of remaining
+// retries.
 func Verify(card *scard.Card, bank uint8, pin []byte) (int, error) {
 	ca := commandAPDU{
 		cla:  0,
@@ -113,18 +115,18 @@ func Verify(card *scard.Card, bank uint8, pin []byte) (int, error) {
 	}
 
 	if bank < 1 || bank > 3 {
-		return 0, errors.New("invalid PIN bank, use banks 1-3")
+		return -1, errors.New("invalid PIN bank, use banks 1-3")
 	}
 
 	ra, err := ca.transmit(card)
 	if err != nil {
-		return 0, err
+		return -1, err
 	}
 
 	if !ra.checkSuccess() {
 		retries, err := getPINRetries(card)
 		if err != nil {
-			return 0, err
+			return -1, err
 		}
 
 		verb := "retry"

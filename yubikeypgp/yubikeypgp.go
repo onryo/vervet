@@ -34,16 +34,16 @@ type encryptedKeyPacket struct {
 // encrypted portion of the message and return the resultant plain text.
 // In the event of an incorrect PIN, Decrypt will return an empty byte array
 // and the number of remaining PIN retries.
-func Decrypt(yk *yubikeyscard.YubiKey, cipherTxt []byte, prompt PinPromptFunction) (plainTxt []byte, retries int, err error) {
+func Decrypt(yk *yubikeyscard.YubiKey, cipherTxt []byte, prompt PinPromptFunction) ([]byte, int, error) {
 	// read encrypted key packet fields and deserialize to struct
 	ek, err := readEncKeyPacket(bytes.NewReader(cipherTxt))
 	if err != nil {
-		return
+		return nil, -1, err
 	}
 
 	// verify that YubiKey has the decryption key needed
 	if !ykHasKey(yk, ek.keyID) {
-		return nil, retries, errors.New("decryption key could not be found on YubiKey")
+		return nil, -1, errors.New("decryption key could not be found on YubiKey")
 	}
 
 	// check if PIN is cached, if not retrieve PIN input from user, then validate format
@@ -52,13 +52,14 @@ func Decrypt(yk *yubikeyscard.YubiKey, cipherTxt []byte, prompt PinPromptFunctio
 	if pin == nil {
 		pin, err = prompt()
 		if err != nil {
-			return
+			return nil, -1, err
 		}
 	}
 
 	// verify the PIN (bank 2) with the OpenPGP smart card applet
-	if retries, err = yubikeyscard.Verify(yk.Card, 2, pin); err != nil {
-		return
+	retries, err := yubikeyscard.Verify(yk.Card, 2, pin)
+	if err != nil {
+		return nil, retries, err
 	} else {
 		// add verified PIN to the cache
 		yk.SetCachedPIN(2, pin)
@@ -67,7 +68,7 @@ func Decrypt(yk *yubikeyscard.YubiKey, cipherTxt []byte, prompt PinPromptFunctio
 	// decipher the session key
 	sk, err := yubikeyscard.Decipher(yk.Card, ek.encryptedBytes)
 	if err != nil {
-		return
+		return nil, retries, err
 	}
 
 	if len(sk) != (sessionKeyLength + 3) {
@@ -84,9 +85,9 @@ func Decrypt(yk *yubikeyscard.YubiKey, cipherTxt []byte, prompt PinPromptFunctio
 	sessionKey := sk[1 : sessionKeyLength+1]
 
 	// read the message from the symmetrically encrypted packet using session key
-	plainTxt, err = readSymEncPacket(bytes.NewReader(cipherTxt[ek.length:]), sessionKey, c)
+	plainTxt, err := readSymEncPacket(bytes.NewReader(cipherTxt[ek.length:]), sessionKey, c)
 
-	return
+	return plainTxt, retries, err
 }
 
 func readHeader(r io.Reader) (tag uint8, length int, contents io.Reader, err error) {
