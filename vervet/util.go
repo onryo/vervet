@@ -11,6 +11,11 @@ import (
 
 const keyFileSizeMax int64 = 8192
 
+const (
+	printKVPadWidth     int = 30
+	printHeaderPadWidth int = 10
+)
+
 // ReadFile will read an unseal key file from the provided path and return a
 // slice of strings containing base64-encoded PGP-encrypted Vault unseal keys.
 func ReadKeyFile(path string) ([]string, error) {
@@ -54,14 +59,31 @@ func readFile(path string, maxBytes int64) ([]byte, error) {
 // PrintKV will bold print the key followed by padding to the specified
 // total width, then the value.
 func PrintKV(key string, value string) {
-	pad := strings.Repeat(".", 28-len(key))
+	pad := strings.Repeat(".", printKVPadWidth-len(key)-2)
 	label := aurora.Bold(fmt.Sprintf("%s %s:", key, pad))
 	fmt.Println(label, value)
 }
 
+// PrintKV will bold print the key followed by padding to the specified
+// total width, then the first value in the slice. If additional values
+// are present in the slice they will be displayed on new line indented
+// to match the previous value.
+func PrintKVSlice(key string, values []string) {
+	for i, value := range values {
+		if i == 0 {
+			pad := strings.Repeat(".", printKVPadWidth-len(key)-2)
+			label := aurora.Bold(fmt.Sprintf("%s %s:", key, pad))
+			fmt.Println(label, value)
+		} else {
+			pad := strings.Repeat(" ", printKVPadWidth)
+			fmt.Println(pad, value)
+		}
+	}
+}
+
 // PrintHeader will print a bolded header label.
 func PrintHeader(label string) {
-	pad := strings.Repeat("=", 10)
+	pad := strings.Repeat("=", printHeaderPadWidth)
 	fmt.Println(aurora.Bold(fmt.Sprintf("%s %s %s", pad, label, pad)))
 }
 
@@ -103,4 +125,17 @@ func fmtFingerprint(fp [20]byte) string {
 	}
 
 	return strings.TrimSpace(fpString[:24] + " " + fpString[24:])
+}
+
+// fmtFingerprintTerse accepts a byte array containing a PGP fingerprint and
+// returns a short form formatted string that displays the last 8 bytes of the
+// fingerprint in 2-byte hexadecimal blocks.
+func fmtFingerprintTerse(fp [20]byte) string {
+	var fpString string
+
+	for i := 12; i < len(fp); i += 2 {
+		fpString = strings.ToUpper(fmt.Sprintf(fpString+"%x", fp[i:i+2]))
+	}
+
+	return fpString
 }
