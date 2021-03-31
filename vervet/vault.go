@@ -36,26 +36,26 @@ func newVaultClient(addr string) (*vaultClient, error) {
 }
 
 // connect to Vault server and execute unseal operation
-func (vault *vaultClient) unseal(keys []string) error {
+func (vault *vaultClient) unseal(keys []string) (*api.SealStatusResponse, error) {
 	resp, err := vault.apiClient.Sys().SealStatus()
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	if !resp.Initialized {
-		return fmt.Errorf("%s - Vault server is not initialized", vault.url.Host)
+		return resp, fmt.Errorf("%s - Vault server is not initialized", vault.url.Host)
 	}
 
 	// if node is already unsealed, skip it
 	if !resp.Sealed {
 		PrintSuccess(vault.url.Host + " - already unsealed, skipping unseal operation")
-		return nil
+		return resp, nil
 	}
 
 	for _, key := range keys {
 		resp, err = vault.apiClient.Sys().Unseal(key)
 		if err != nil {
-			return err
+			return nil, err
 		}
 
 		if !resp.Sealed {
@@ -67,38 +67,34 @@ func (vault *vaultClient) unseal(keys []string) error {
 
 	resp, err = vault.apiClient.Sys().SealStatus()
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	if !resp.Sealed {
 		PrintSuccess(fmt.Sprintf("%s - Vault unsealed", vault.url.Host))
 	}
 
-	fmt.Println()
-	PrintHeader("Vault Cluster Status")
-	printSealStatus(resp)
-
-	return nil
+	return resp, nil
 }
 
 // connect to Vault server and execute unseal operation
-func (vault *vaultClient) generateRoot(keys []string) error {
+func (vault *vaultClient) generateRoot(keys []string) (*api.GenerateRootStatusResponse, error) {
 	resp, err := vault.apiClient.Sys().GenerateRootStatus()
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	// if node is already unsealed, skip it
 	if !resp.Started {
 		PrintWarning(vault.url.Host + " - root token generation process has not been started")
-		return nil
+		return resp, nil
 	}
 
 	nonce := resp.Nonce
 	for _, key := range keys {
 		resp, err = vault.apiClient.Sys().GenerateRootUpdate(key, nonce)
 		if err != nil {
-			return err
+			return nil, err
 		}
 
 		msg := fmt.Sprintf("%s - provided unseal key share, root token generation progress: %d of %d key shares",
@@ -110,15 +106,11 @@ func (vault *vaultClient) generateRoot(keys []string) error {
 			PrintSuccess(msg)
 
 			printGenRootStatus(resp)
-			return nil
+			return resp, nil
 		}
 	}
 
-	fmt.Println()
-	PrintHeader("Root Token Generation Status")
-	printGenRootStatus(resp)
-
-	return nil
+	return resp, nil
 }
 
 func printSealStatus(resp *api.SealStatusResponse) {

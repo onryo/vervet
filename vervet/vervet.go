@@ -17,14 +17,21 @@ func Unseal(vaultAddrs []string, encryptedKeys []string) error {
 		return err
 	}
 
-	for _, addr := range vaultAddrs {
+	for i, addr := range vaultAddrs {
 		vault, err := newVaultClient(addr)
 		if err != nil {
 			return err
 		}
 
-		if err = vault.unseal(keys); err != nil {
+		resp, err := vault.unseal(keys)
+		if err != nil {
 			return err
+		}
+
+		if i == len(vaultAddrs)-1 {
+			fmt.Println()
+			PrintHeader("Vault Cluster Status")
+			printSealStatus(resp)
 		}
 	}
 
@@ -44,9 +51,14 @@ func GenerateRoot(vaultAddr string, encryptedKeys []string) error {
 		return err
 	}
 
-	if err = vault.generateRoot(keys); err != nil {
+	resp, err := vault.generateRoot(keys)
+	if err != nil {
 		return err
 	}
+
+	fmt.Println()
+	PrintHeader("Root Token Generation Status")
+	printGenRootStatus(resp)
 
 	return nil
 }
