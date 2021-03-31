@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"log"
 	"vervet/vervet"
 
 	"github.com/spf13/cobra"
@@ -36,8 +35,13 @@ var generateRootServerSubCmd = &cobra.Command{
 		vaultAddr := getVaultAddress(args[0])
 		keyPath := args[1]
 
-		if err := vervet.GenerateRootServer(vaultAddr, keyPath, keyFileBinary, vaultGenerateRootNonce); err != nil {
-			log.Fatal(err)
+		keys, err := vervet.ReadKeyFile(keyPath)
+		if err != nil {
+			vervet.PrintFatal(err.Error(), 1)
+		}
+
+		if err := vervet.GenerateRoot(vaultAddr, keys); err != nil {
+			vervet.PrintFatal(err.Error(), 1)
 		}
 	},
 }
@@ -52,11 +56,15 @@ var generateRootClusterSubCmd = &cobra.Command{
 
 		cluster, err := getVaultClusterConfig(clusterName)
 		if err != nil {
-			log.Fatal(err)
+			vervet.PrintFatal(err.Error(), 1)
 		}
 
-		if err := vervet.GenerateRootCluster(cluster.Servers, cluster.Keys, vaultGenerateRootNonce); err != nil {
-			log.Fatal(err)
+		if len(cluster.Servers) == 0 {
+			vervet.PrintFatal("no Vault servers in configuration", 1)
+		}
+
+		if err := vervet.GenerateRoot(cluster.Servers[0], cluster.Keys); err != nil {
+			vervet.PrintFatal(err.Error(), 1)
 		}
 	},
 }

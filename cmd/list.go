@@ -1,24 +1,47 @@
 package cmd
 
 import (
-	"log"
+	"fmt"
 	"vervet/vervet"
 
 	"github.com/spf13/cobra"
 )
 
+func init() {
+	listCmd.AddCommand(listClustersSubCmd)
+	listCmd.AddCommand(listYubikeysSubCmd)
+
+	rootCmd.AddCommand(listCmd)
+}
+
 var listCmd = &cobra.Command{
 	Use:   "list",
-	Short: "List info of connected YubiKeys",
-	Long:  `Shows data objects returned from YubiKey OpenPGP Application.`,
+	Short: "List connected YubiKeys and configured Vault clusters",
+	Long:  `List connected YubiKeys and configured Vault clusters.`,
+}
+
+var listClustersSubCmd = &cobra.Command{
+	Use:   "clusters",
+	Short: "List Vault clusters",
+	Long:  `List Vault clusters in Vervet configuration file.`,
 	Run: func(cmd *cobra.Command, args []string) {
-		err := vervet.ListYubiKeys()
-		if err != nil {
-			log.Fatal(err)
+		for name, cluster := range config.Clusters {
+			vervet.PrintHeader(name)
+			vervet.PrintKVSlice("Server(s)", cluster[0].Servers)
+			vervet.PrintKV("Key(s)", fmt.Sprintf("%d", len(cluster[0].Keys)))
+			fmt.Println()
 		}
 	},
 }
 
-func init() {
-	rootCmd.AddCommand(listCmd)
+var listYubikeysSubCmd = &cobra.Command{
+	Use:   "yubikeys",
+	Short: "List connected YubiKeys",
+	Long:  `List overview of connected YubiKeys.`,
+	Run: func(cmd *cobra.Command, args []string) {
+		err := vervet.ListYubiKeys()
+		if err != nil {
+			vervet.PrintFatal(err.Error(), 1)
+		}
+	},
 }

@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/binary"
 	"errors"
-	"fmt"
 	"io"
 	"vervet/yubikeyscard"
 
@@ -13,8 +12,6 @@ import (
 
 const (
 	sessionKeyLength                = 16
-	unsealKeyLengthMin              = 16
-	unsealKeyLengthMax              = 33
 	encryptedKeyPacketHeaderLength  = 3
 	encryptedKeyPacketKeyInfoLength = 12
 	symmetricallyEncryptedVersion   = 1
@@ -35,16 +32,18 @@ type encryptedKeyPacket struct {
 // Decrypt will decrypt a PGP-encrypted message by using a YubiKey to first
 // obtain the session key (DEK). Decrypt will then decrypt the symmetrically
 // encrypted portion of the message and return the resultant plain text.
-func Decrypt(yk *yubikeyscard.YubiKey, msg []byte, prompt PinPromptFunction) ([]byte, error) {
+// In the event of an incorrect PIN, Decrypt will return an empty byte array
+// and the number of remaining PIN retries.
+func Decrypt(yk *yubikeyscard.YubiKey, cipherTxt []byte, prompt PinPromptFunction) ([]byte, int, error) {
 	// read encrypted key packet fields and deserialize to struct
-	ek, err := readEncKeyPacket(bytes.NewReader(msg))
+	ek, err := readEncKeyPacket(bytes.NewReader(cipherTxt))
 	if err != nil {
-		return nil, err
+		return nil, -1, err
 	}
 
 	// verify that YubiKey has the decryption key needed
 	if !ykHasKey(yk, ek.keyID) {
-		return nil, errors.New("decryption key could not be found on YubiKey")
+		return nil, -1, errors.New("decryption key could not be found on YubiKey")
 	}
 
 	// check if PIN is cached, if not retrieve PIN input from user, then validate format
@@ -53,13 +52,14 @@ func Decrypt(yk *yubikeyscard.YubiKey, msg []byte, prompt PinPromptFunction) ([]
 	if pin == nil {
 		pin, err = prompt()
 		if err != nil {
-			return nil, err
+			return nil, -1, err
 		}
 	}
 
 	// verify the PIN (bank 2) with the OpenPGP smart card applet
-	if err = yubikeyscard.Verify(yk.Card, 2, pin); err != nil {
-		return nil, err
+	retries, err := yubikeyscard.Verify(yk.Card, 2, pin)
+	if err != nil {
+		return nil, retries, err
 	} else {
 		// add verified PIN to the cache
 		yk.SetCachedPIN(2, pin)
@@ -68,37 +68,26 @@ func Decrypt(yk *yubikeyscard.YubiKey, msg []byte, prompt PinPromptFunction) ([]
 	// decipher the session key
 	sk, err := yubikeyscard.Decipher(yk.Card, ek.encryptedBytes)
 	if err != nil {
-		return nil, err
+		return nil, retries, err
 	}
 
 	if len(sk) != (sessionKeyLength + 3) {
-		return nil, errors.New("unable to decipher PGP session key")
+		return nil, retries, errors.New("unable to decipher PGP session key")
 	}
 
 	// get cipher function from first octect
 	c := packet.CipherFunction(sk[0])
 	if c != packet.CipherAES128 {
-		return nil, errors.New("unsupported cipher function, only AES-128-CFB supported")
+		return nil, retries, errors.New("unsupported cipher function, only AES-128-CFB supported")
 	}
 
 	// after cipher function, the next 16 bytes contain the session key
 	sessionKey := sk[1 : sessionKeyLength+1]
 
-	// read the unseal key from the symmetrically encrypted packet using session key
-	unsealKey, err := readSymEncPacket(bytes.NewReader(msg[ek.length:]), sessionKey, c)
-	if err != nil {
-		return nil, err
-	}
+	// read the message from the symmetrically encrypted packet using session key
+	plainTxt, err := readSymEncPacket(bytes.NewReader(cipherTxt[ek.length:]), sessionKey, c)
 
-	// unsealKey is a byte slice of unicode characters, divide length by 2 to get raw byte length
-	if len(unsealKey)/2 < unsealKeyLengthMin {
-		return nil, fmt.Errorf("unseal key length is shorter than minimum %d bytes", unsealKeyLengthMin)
-	}
-	if len(unsealKey)/2 > unsealKeyLengthMax {
-		return nil, fmt.Errorf("unseal key length is longer than maximum %d bytes", unsealKeyLengthMax)
-	}
-
-	return unsealKey, nil
+	return plainTxt, retries, err
 }
 
 func readHeader(r io.Reader) (tag uint8, length int, contents io.Reader, err error) {

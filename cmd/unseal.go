@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"log"
 	"vervet/vervet"
 
 	"github.com/spf13/cobra"
@@ -10,7 +9,6 @@ import (
 func init() {
 	unsealServerSubCmd.Flags().IntVarP(&vaultPort, "port", "p", 8200, "Vault API port")
 	unsealServerSubCmd.Flags().BoolVarP(&vaultTLSDisable, "insecure", "i", false, "disable TLS")
-	unsealServerSubCmd.Flags().BoolVarP(&keyFileBinary, "binary", "b", false, "read encrypted unseal key file as binary data (default: base64)")
 
 	unsealCmd.AddCommand(unsealServerSubCmd)
 	unsealCmd.AddCommand(unsealClusterSubCmd)
@@ -34,8 +32,13 @@ var unsealServerSubCmd = &cobra.Command{
 		vaultAddr := getVaultAddress(args[0])
 		keyPath := args[1]
 
-		if err := vervet.UnsealServer(vaultAddr, keyPath, keyFileBinary); err != nil {
-			log.Fatal(err)
+		keys, err := vervet.ReadKeyFile(keyPath)
+		if err != nil {
+			vervet.PrintFatal(err.Error(), 1)
+		}
+
+		if err := vervet.Unseal([]string{vaultAddr}, keys); err != nil {
+			vervet.PrintFatal(err.Error(), 1)
 		}
 	},
 }
@@ -50,11 +53,15 @@ var unsealClusterSubCmd = &cobra.Command{
 
 		cluster, err := getVaultClusterConfig(clusterName)
 		if err != nil {
-			log.Fatal(err)
+			vervet.PrintFatal(err.Error(), 1)
 		}
 
-		if err := vervet.UnsealCluster(cluster.Servers, cluster.Keys); err != nil {
-			log.Fatal(err)
+		if len(cluster.Servers) == 0 {
+			vervet.PrintFatal("no Vault servers in configuration", 1)
+		}
+
+		if err := vervet.Unseal(cluster.Servers, cluster.Keys); err != nil {
+			vervet.PrintFatal(err.Error(), 1)
 		}
 	},
 }

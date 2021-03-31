@@ -7,79 +7,128 @@ import (
 	"github.com/hashicorp/vault/api"
 )
 
-// connect to Vault server and execute unseal operation
-func vaultUnseal(vaultAddr string, unsealKey string) error {
-	vaultURL, err := url.Parse(vaultAddr)
-	if err != nil {
-		return err
-	}
+type vaultClient struct {
+	apiClient *api.Client
+	url       *url.URL
+}
+
+func newVaultClient(addr string) (*vaultClient, error) {
+	vault := new(vaultClient)
 
 	config := &api.Config{
-		Address: vaultAddr,
+		Address: addr,
 	}
-	client, err := api.NewClient(config)
+
+	api, err := api.NewClient(config)
 	if err != nil {
-		return err
+		return vault, err
 	}
 
-	sealStatusRsp, err := client.Sys().Unseal(unsealKey)
+	url, err := url.Parse(addr)
 	if err != nil {
-		return err
+		return vault, err
 	}
 
-	fmt.Printf("Vault server: %s\n", vaultURL.Host)
-	vaultPrintSealStatus(sealStatusRsp)
+	vault.apiClient = api
+	vault.url = url
 
-	return nil
+	return vault, nil
 }
 
 // connect to Vault server and execute unseal operation
-func vaultGenerateRoot(vaultAddr string, unsealKey string, nonce string) error {
-	vaultURL, err := url.Parse(vaultAddr)
+func (vault *vaultClient) unseal(keys []string) (*api.SealStatusResponse, error) {
+	resp, err := vault.apiClient.Sys().SealStatus()
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	config := &api.Config{
-		Address: vaultAddr,
+	if !resp.Initialized {
+		return resp, fmt.Errorf("%s - Vault server is not initialized", vault.url.Host)
 	}
-	client, err := api.NewClient(config)
+
+	// if node is already unsealed, skip it
+	if !resp.Sealed {
+		PrintSuccess(vault.url.Host + " - already unsealed, skipping unseal operation")
+		return resp, nil
+	}
+
+	for _, key := range keys {
+		resp, err = vault.apiClient.Sys().Unseal(key)
+		if err != nil {
+			return nil, err
+		}
+
+		if !resp.Sealed {
+			break
+		}
+	}
+
+	PrintInfo(fmt.Sprintf("%s - provided %d unseal key share(s) toward unseal progress", vault.url.Host, len(keys)))
+
+	resp, err = vault.apiClient.Sys().SealStatus()
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	genRootStatusRsp, err := client.Sys().GenerateRootUpdate(unsealKey, nonce)
-	if err != nil {
-		return err
+	if !resp.Sealed {
+		PrintSuccess(fmt.Sprintf("%s - Vault unsealed", vault.url.Host))
 	}
 
-	fmt.Printf("Vault server: %s\n", vaultURL.Host)
-	vaultPrintGenRootStatus(genRootStatusRsp)
-
-	return nil
+	return resp, nil
 }
 
-func vaultPrintSealStatus(resp *api.SealStatusResponse) {
+// connect to Vault server and execute unseal operation
+func (vault *vaultClient) generateRoot(keys []string) (*api.GenerateRootStatusResponse, error) {
+	resp, err := vault.apiClient.Sys().GenerateRootStatus()
+	if err != nil {
+		return nil, err
+	}
+
+	// if node is already unsealed, skip it
+	if !resp.Started {
+		PrintWarning(vault.url.Host + " - root token generation process has not been started")
+		return resp, nil
+	}
+
+	nonce := resp.Nonce
+	for _, key := range keys {
+		resp, err = vault.apiClient.Sys().GenerateRootUpdate(key, nonce)
+		if err != nil {
+			return nil, err
+		}
+
+		msg := fmt.Sprintf("%s - provided unseal key share, root token generation progress: %d of %d key shares",
+			vault.url.Host, resp.Progress, resp.Required)
+		PrintInfo(msg)
+
+		if resp.Complete {
+			msg = fmt.Sprintf("%s - root token generation complete", vault.url.Host)
+			PrintSuccess(msg)
+
+			printGenRootStatus(resp)
+			return resp, nil
+		}
+	}
+
+	return resp, nil
+}
+
+func printSealStatus(resp *api.SealStatusResponse) {
 	status := "unsealed"
 	if resp.Sealed {
 		status = "sealed"
 	} else {
-		fmt.Printf("Cluster name: %s\n", resp.ClusterName)
-		fmt.Printf("Cluster ID: %s\n", resp.ClusterID)
+		PrintKV("Cluster name", resp.ClusterName)
+		PrintKV("Cluster ID", resp.ClusterID)
 	}
 
-	if resp.Initialized {
-		fmt.Printf("Seal status: %s\n", status)
-		fmt.Printf("Key threshold/shares: %d/%d\n", resp.T, resp.N)
-		fmt.Printf("Progress: %d/%d\n", resp.Progress, resp.T)
-		fmt.Printf("Version: %s\n", resp.Version)
-
-	} else {
-		fmt.Println("Vault server is not initialized.")
-	}
+	PrintKV("Seal status", status)
+	PrintKV("Key threshold/shares", fmt.Sprintf("%d/%d", resp.T, resp.N))
+	PrintKV("Progress", fmt.Sprintf("%d/%d", resp.Progress, resp.T))
+	PrintKV("Version", resp.Version)
 }
 
-func vaultPrintGenRootStatus(resp *api.GenerateRootStatusResponse) {
+func printGenRootStatus(resp *api.GenerateRootStatusResponse) {
 	status := "not started"
 	if resp.Started {
 		status = "started"
@@ -89,12 +138,18 @@ func vaultPrintGenRootStatus(resp *api.GenerateRootStatusResponse) {
 		}
 	}
 
-	fmt.Printf("Root generation: %s\n", status)
-	fmt.Printf("Nonce: %s\n", resp.Nonce)
-	fmt.Printf("Progress: %d/%d\n", resp.Progress, resp.Required)
-	fmt.Printf("PGP fingerprint: %s\n", resp.PGPFingerprint)
+	PrintKV("Root generation", status)
+
+	if resp.Started {
+		PrintKV("Nonce", resp.Nonce)
+		PrintKV("Progress", fmt.Sprintf("%d/%d", resp.Progress, resp.Required))
+
+		if resp.PGPFingerprint != "" {
+			PrintKV("PGP fingerprint", resp.PGPFingerprint)
+		}
+	}
 
 	if resp.EncodedRootToken != "" {
-		fmt.Printf("Encoded root token: %s\n", resp.EncodedRootToken)
+		PrintKV("Encoded root token", resp.EncodedRootToken)
 	}
 }

@@ -11,44 +11,79 @@ import (
 	"golang.org/x/term"
 )
 
-// decryptUnsealKey decrypts a base64-encoded PGP-encrypted Vault unseal key.
-func decryptUnsealKey(yk *yubikeyscard.YubiKey, encryptedKeyB64 string) (string, error) {
-	encryptedKey, err := base64.StdEncoding.DecodeString(encryptedKeyB64)
-	if err != nil {
-		return "", errors.New("encrypted unseal key is not base64 encoded")
+const (
+	unsealKeyLengthMin int = 16
+	unsealKeyLengthMax int = 33
+)
+
+// decryptUnsealKeys wraps decryptUnsealKey to decrypt a slice of unseal keys
+// and provide console messages.
+func decryptUnsealKeys(encryptedKeys []string) ([]string, error) {
+	yk := new(yubikeyscard.YubiKey)
+	if err := yk.Connect(); err != nil {
+		return nil, err
 	}
 
-	decryptedKey, err := yubikeypgp.Decrypt(yk, encryptedKey, promptPIN)
-	if err != nil {
-		return "", err
+	defer yk.Disconnect()
+
+	var keys []string
+	for _, ek := range encryptedKeys {
+		key, err := decryptUnsealKey(yk, ek)
+		if err != nil {
+			PrintWarning(err.Error())
+		} else {
+			keys = append(keys, key)
+		}
 	}
 
-	return string(decryptedKey), nil
+	if len(keys) == 0 {
+		return nil, errors.New("no Vault unseal keys found, cannot proceed with unseal operation")
+	}
+
+	msg := fmt.Sprintf("decrypted %d Vault unseal key(s)", len(keys))
+	PrintSuccess(msg)
+
+	return keys, nil
 }
 
-// decryptUnsealKey reads a PGP-encrypted Vault unseal key file and decrypts the key.
-func decryptUnsealKeyFromFile(yk *yubikeyscard.YubiKey, encryptedKeyPath string, binary bool) (string, error) {
-	contents, err := readFile(encryptedKeyPath)
+// decryptUnsealKey performs a base64 decode, then decrypts a PGP-encrypted
+// Vault unseal key.
+func decryptUnsealKey(yk *yubikeyscard.YubiKey, cipherTxtB64 string) (unsealKey string, err error) {
+	encryptedKey, err := base64.StdEncoding.DecodeString(cipherTxtB64)
 	if err != nil {
-		return "", err
+		err = errors.New("encrypted unseal key is not base64 encoded")
+		return
 	}
 
-	var encryptedKey []byte
-	if !binary {
-		encryptedKey, err = base64.StdEncoding.DecodeString(fmt.Sprintf("%s", contents))
+	retries := 1
+	for retries > 0 {
+		plainTxtBytes, retries, err := yubikeypgp.Decrypt(yk, encryptedKey, promptPIN)
 		if err != nil {
-			return "", errors.New("encrypted unseal key file is not base64 encoded")
+			if retries == 0 {
+				return "", errors.New("PIN bank locked, no retries remaining")
+			}
+
+			PrintError(err.Error())
+			continue
 		}
-	} else {
-		encryptedKey = contents
+
+		unsealKey = string(plainTxtBytes)
+		break
+
 	}
 
-	decryptedKey, err := yubikeypgp.Decrypt(yk, encryptedKey, promptPIN)
-	if err != nil {
-		return "", err
+	// unsealKey is a byte slice of unicode characters, divide length by 2 to get raw byte length
+	n := len(unsealKey) / 2
+	if n < unsealKeyLengthMin {
+		err = fmt.Errorf("unseal key length is shorter than minimum %d bytes", unsealKeyLengthMin)
+		return
+	}
+	if n > unsealKeyLengthMax {
+		err = fmt.Errorf("unseal key length is longer than maximum %d bytes", unsealKeyLengthMax)
+		return
 	}
 
-	return string(decryptedKey), nil
+	return
 }
 
 // promptPin will read a PIN from an interactive terminal.
@@ -59,7 +94,7 @@ func promptPIN() ([]byte, error) {
 		return []byte{}, err
 	}
 
-	fmt.Printf("\n\n")
+	fmt.Println()
 
 	if len(p) < 6 || len(p) > 127 {
 		return []byte{}, errors.New("expected PIN length of 6-127 characters")
