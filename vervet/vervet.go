@@ -51,9 +51,60 @@ func GenerateRoot(vaultAddr string, encryptedKeys []string) error {
 	return nil
 }
 
-// ListYubiKeys will output the connected YubiKeys and the associated card and
-// application-related data.
+// ListVaultStatus will output of the status the provided Vault address.
+func ListVaultStatus(vaultAddr string) error {
+	vault, err := newVaultClient(vaultAddr)
+	if err != nil {
+		return err
+	}
+
+	resp, err := vault.apiClient.Sys().SealStatus()
+	if err != nil {
+		return err
+	}
+
+	printSealStatus(resp)
+
+	return nil
+}
+
+// ListYubiKeys will output the connected YubiKeys and basic details.
 func ListYubiKeys() error {
+	// connect YubiKey smart card interface, disconnect on return
+	yk := new(yubikeyscard.YubiKey)
+	if err := yk.Connect(); err != nil {
+		return err
+	}
+
+	defer yk.Disconnect()
+
+	ard := yk.AppRelatedData
+	crd := yk.CardRelatedData
+
+	PrintHeader(yk.ReaderLabel)
+	PrintKV("Manufacturer", "Yubico")
+	PrintKV("Serial number", fmt.Sprintf("%x", ard.AID.Serial))
+
+	if crd.Name != nil {
+		PrintKV("Name of cardholder", strings.Replace(fmt.Sprintf("%s", crd.Name), "<<", " ", -1))
+	}
+
+	PrintKV("Signature key", fmt.Sprintf("rsa%d/%s",
+		binary.BigEndian.Uint16(ard.AlgoAttrSign.RSAModLen[:]),
+		fmtFingerprintTerse(ard.Fingerprints.Sign)))
+	PrintKV("Encryption key", fmt.Sprintf("rsa%d/%s",
+		binary.BigEndian.Uint16(ard.AlgoAttrEnc.RSAModLen[:]),
+		fmtFingerprintTerse(ard.Fingerprints.Enc)))
+	PrintKV("Authentication key", fmt.Sprintf("rsa%d/%s",
+		binary.BigEndian.Uint16(ard.AlgoAttrAuth.RSAModLen[:]),
+		fmtFingerprintTerse(ard.Fingerprints.Auth)))
+
+	return nil
+}
+
+// ShowYubiKey will output the connected YubiKey and associated card and
+// application-related data.
+func ShowYubiKey() error {
 	// connect YubiKey smart card interface, disconnect on return
 	yk := new(yubikeyscard.YubiKey)
 	if err := yk.Connect(); err != nil {
@@ -81,11 +132,18 @@ func ListYubiKeys() error {
 	PrintKV("Serial number", fmt.Sprintf("%x", ard.AID.Serial))
 	PrintKV("Name of cardholder", strings.Replace(fmt.Sprintf("%s", crd.Name), "<<", " ", -1))
 	PrintKV("Language prefs", string(crd.LanguagePrefs))
-	PrintKV("Salutation", string(crd.Salutation))
-	PrintKV("Key attributes", fmt.Sprintf("rsa%d rsa%d rsa%d",
-		binary.BigEndian.Uint16(ard.AlgoAttrSign.RSAModLen[:]),
-		binary.BigEndian.Uint16(ard.AlgoAttrEnc.RSAModLen[:]),
-		binary.BigEndian.Uint16(ard.AlgoAttrAuth.RSAModLen[:])))
+
+	switch crd.Salutation {
+	case 0x30:
+		PrintKV("Pronoun", "unspecified")
+	case 0x31:
+		PrintKV("Pronoun", "he")
+	case 0x32:
+		PrintKV("Pronoun", "he")
+	case 0x39:
+		PrintKV("Pronoun", "they")
+	}
+
 	PrintKV("Max. PIN lengths", fmt.Sprintf("%d %d %d",
 		ard.PWStatus.PW1MaxLenFmt,
 		ard.PWStatus.PW1MaxLenRC,
@@ -94,13 +152,22 @@ func ListYubiKeys() error {
 		ard.PWStatus.PW1RetryCtr,
 		ard.PWStatus.PW1RCRetryCtr,
 		ard.PWStatus.PW3RetryCtr))
+
 	PrintKV("Signature key", fmtFingerprint(ard.Fingerprints.Sign))
+	PrintKV("    algorithm", fmt.Sprintf("rsa%d",
+		binary.BigEndian.Uint16(ard.AlgoAttrSign.RSAModLen[:])))
 	signGenDate := int64(binary.BigEndian.Uint32(ard.KeyGenDates.Sign[:]))
 	PrintKV("    created", time.Unix(signGenDate, 0).String())
+
 	PrintKV("Encryption key", fmtFingerprint(ard.Fingerprints.Enc))
+	PrintKV("    algorithm", fmt.Sprintf("rsa%d",
+		binary.BigEndian.Uint16(ard.AlgoAttrEnc.RSAModLen[:])))
 	encGenDate := int64(binary.BigEndian.Uint32(ard.KeyGenDates.Enc[:]))
 	PrintKV("    created", time.Unix(encGenDate, 0).String())
+
 	PrintKV("Authentication key", fmtFingerprint(ard.Fingerprints.Auth))
+	PrintKV("    algorithm", fmt.Sprintf("rsa%d",
+		binary.BigEndian.Uint16(ard.AlgoAttrAuth.RSAModLen[:])))
 	authGenDate := int64(binary.BigEndian.Uint32(ard.KeyGenDates.Auth[:]))
 	PrintKV("    created", time.Unix(authGenDate, 0).String())
 
