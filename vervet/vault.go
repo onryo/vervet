@@ -74,6 +74,7 @@ func (vault *vaultClient) unseal(keys []string) error {
 		PrintSuccess(fmt.Sprintf("%s - Vault unsealed", vault.url.Host))
 	}
 
+	fmt.Println()
 	printSealStatus(resp)
 
 	return nil
@@ -112,13 +113,13 @@ func (vault *vaultClient) generateRoot(keys []string) error {
 		}
 	}
 
+	fmt.Println()
 	printGenRootStatus(resp)
 
 	return nil
 }
 
 func printSealStatus(resp *api.SealStatusResponse) {
-	fmt.Println()
 	PrintHeader("Vault Unseal Status")
 
 	status := "unsealed"
@@ -136,7 +137,6 @@ func printSealStatus(resp *api.SealStatusResponse) {
 }
 
 func printGenRootStatus(resp *api.GenerateRootStatusResponse) {
-	fmt.Println()
 	PrintHeader("Root Token Generation Status")
 
 	status := "not started"
