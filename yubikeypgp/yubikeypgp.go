@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"io"
 	"vervet/yubikeyscard"
 
@@ -44,7 +45,7 @@ func Decrypt(yks *yubikeyscard.YubiKeys, cipherTxt []byte, prompt PinPromptFunct
 	// locate YubiKey with matching decryption key
 	yk := yks.FindByKeyID(ek.keyID)
 	if yk == nil {
-		return nil, -1, errors.New("decryption key could not be found on YubiKey")
+		return nil, -1, fmt.Errorf("decryption key %X could not be found on any YubiKeys", ek.keyID)
 	}
 
 	// check if PIN is cached, if not retrieve PIN input from user, then validate format

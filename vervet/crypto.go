@@ -59,17 +59,19 @@ func decryptUnsealKey(yks *yubikeyscard.YubiKeys, cipherTxtB64 string) (unsealKe
 	for retries > 0 {
 		plainTxtBytes, retries, err := yubikeypgp.Decrypt(yks, encryptedKey, promptPIN)
 		if err != nil {
-			if retries == 0 {
+			switch {
+			case retries == 0:
 				return "", errors.New("PIN bank locked, no retries remaining")
+			case retries < 0:
+				return "", err
+			default:
+				PrintError(err.Error())
+				continue
 			}
-
-			PrintError(err.Error())
-			continue
 		}
 
 		unsealKey = string(plainTxtBytes)
 		break
-
 	}
 
 	// unsealKey is a byte slice of unicode characters, divide length by 2 to get raw byte length
