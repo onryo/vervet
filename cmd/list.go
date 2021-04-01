@@ -25,11 +25,17 @@ var listClustersSubCmd = &cobra.Command{
 	Short: "List Vault clusters",
 	Long:  `List Vault clusters in Vervet configuration file.`,
 	Run: func(cmd *cobra.Command, args []string) {
+		i := 0
 		for name, cluster := range config.Clusters {
 			vervet.PrintHeader(name)
 			vervet.PrintKVSlice("Server(s)", cluster[0].Servers)
 			vervet.PrintKV("Key(s)", fmt.Sprintf("%d", len(cluster[0].Keys)))
-			fmt.Println()
+
+			if i < len(config.Clusters)-1 {
+				fmt.Println()
+			}
+
+			i++
 		}
 	},
 }
