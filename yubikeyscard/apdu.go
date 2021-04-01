@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
+	"io"
 
 	"github.com/ebfe/scard"
 )
@@ -19,44 +20,50 @@ type commandAPDU struct {
 	elf              bool   // Use extended length fields
 }
 
+// responseAPDU represents an application data unit received from a smart card.
+type responseAPDU struct {
+	data     []byte // response data
+	sw1, sw2 uint8  // status words 1 and 2
+}
+
 // serialize serializes a command APDU.
 func (ca commandAPDU) serialize() ([]byte, error) {
 	buf := new(bytes.Buffer)
 
 	// write 4 header bytes to buffer
-	if err := binary.Write(buf, binary.BigEndian, []byte{ca.cla, ca.ins, ca.p1, ca.p2}); err != nil {
+	if _, err := buf.Write([]byte{ca.cla, ca.ins, ca.p1, ca.p2}); err != nil {
 		return nil, err
 	}
 
 	// if a payload exists, calculate the length, prepend it to the payload, and write to buffer
 	if len(ca.data) > 0 {
-		l := len(ca.data)
+		lc := len(ca.data)
 
 		// subtract one byte from length if padding indicator byte present
 		if ca.pib {
-			l--
+			lc--
 		}
 
 		// check if extended length fields (3 bytes) should be used
 		if ca.elf {
-			lc := make([]byte, 2)
-			binary.BigEndian.PutUint16(lc, uint16(l))
+			lcElf := make([]byte, 2)
+			binary.BigEndian.PutUint16(lcElf, uint16(lc))
 
-			if err := binary.Write(buf, binary.BigEndian, append([]byte{0}, lc...)); err != nil {
+			if _, err := buf.Write(append([]byte{0}, lcElf...)); err != nil {
 				return nil, err
 			}
 		} else {
-			if err := binary.Write(buf, binary.BigEndian, uint8(l)); err != nil {
+			if _, err := buf.Write([]byte{uint8(lc)}); err != nil {
 				return nil, err
 			}
 		}
 
-		if err := binary.Write(buf, binary.BigEndian, ca.data); err != nil {
+		if _, err := buf.Write(ca.data); err != nil {
 			return nil, err
 		}
 	}
 
-	if err := binary.Write(buf, binary.BigEndian, ca.le); err != nil {
+	if _, err := buf.Write([]byte{ca.le}); err != nil {
 		return nil, err
 	}
 
@@ -84,30 +91,28 @@ func (ca commandAPDU) transmit(card *scard.Card) (responseAPDU, error) {
 	return *ra, nil
 }
 
-// responseAPDU represents an application data unit received from a smart card.
-type responseAPDU struct {
-	data     []byte // response data
-	sw1, sw2 uint8  // status words 1 and 2
-}
-
 // deserialize deserializes a response APDU.
 func (ra *responseAPDU) deserialize(data []byte) error {
 	if len(data) < 2 {
 		return fmt.Errorf("can not deserialize data: payload too short (%d < 2)", len(data))
 	}
 
-	ra.data = make([]byte, len(data)-2)
+	r := bytes.NewReader(data)
 
-	buf := bytes.NewReader(data)
-	if err := binary.Read(buf, binary.BigEndian, &ra.data); err != nil {
+	ra.data = make([]byte, len(data)-2)
+	_, err := io.ReadFull(r, ra.data)
+	if err != nil {
 		return err
 	}
 
-	for _, sw := range []*byte{&ra.sw1, &ra.sw2} {
-		if err := binary.Read(buf, binary.BigEndian, sw); err != nil {
-			return err
-		}
+	sw := make([]byte, 2)
+	_, err = io.ReadFull(r, sw)
+	if err != nil {
+		return err
 	}
+
+	ra.sw1 = sw[0]
+	ra.sw2 = sw[1]
 
 	return nil
 }

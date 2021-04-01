@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"io"
 	"regexp"
 	"time"
 
@@ -92,220 +93,6 @@ type KeyGenDates struct {
 	Auth [4]byte
 }
 
-func waitUntilCardsPresent(ctx *scard.Context, readers []string) ([]string, error) {
-	start := time.Now()
-	var presentReaders []string
-	rs := make([]scard.ReaderState, len(readers))
-
-	for i := range rs {
-		rs[i].Reader = readers[i]
-		rs[i].CurrentState = scard.StateUnaware
-	}
-
-	for {
-		ready := 0
-		for i := range rs {
-			rs[i].CurrentState = rs[i].EventState
-			if rs[i].EventState&scard.StatePresent != 0 {
-				ready++
-
-				for _, pr := range presentReaders {
-					if pr == readers[i] {
-						continue
-					}
-				}
-
-				presentReaders = append(presentReaders, readers[i])
-			}
-
-		}
-
-		if ready == len(readers) {
-			return presentReaders, nil
-		}
-
-		err := ctx.GetStatusChange(rs, time.Duration(scardPresentTimeout)*time.Second)
-		if err != nil {
-			return nil, err
-		}
-
-		if time.Since(start) > time.Duration(scardGetStatusChangeTimeout)*time.Second {
-			return presentReaders, nil
-		}
-	}
-}
-
-func getPINRetries(card *scard.Card) (int, error) {
-	data, err := GetData(card, doPWStatus)
-	if err != nil {
-		return 0, err
-	}
-
-	return int(data[4]), nil
-}
-
-func GetCardRelatedData(card *scard.Card) (CardRelatedData, error) {
-	var crd CardRelatedData
-	data, err := GetData(card, doCardRelData)
-	if err != nil {
-		return CardRelatedData{}, err
-	}
-
-	for _, c := range doCardRelData.getChildren() {
-		cData := doFindTLV(data, c.tag, 1)
-		buf := bytes.NewReader(cData)
-
-		switch c.tag {
-		case doName.tag:
-			crd.Name = make([]byte, buf.Len())
-			if err := binary.Read(buf, binary.BigEndian, &crd.Name); err != nil {
-				return CardRelatedData{}, err
-			}
-		case doLangPrefs.tag:
-			crd.LanguagePrefs = make([]byte, buf.Len())
-			if err := binary.Read(buf, binary.BigEndian, &crd.LanguagePrefs); err != nil {
-				return CardRelatedData{}, err
-			}
-		case doSalutation.tag:
-			if err := binary.Read(buf, binary.BigEndian, &crd.Salutation); err != nil {
-				return CardRelatedData{}, err
-			}
-		}
-		if err != nil {
-			return CardRelatedData{}, err
-		}
-	}
-
-	return crd, nil
-}
-
-func GetAppRelatedData(card *scard.Card) (AppRelatedData, error) {
-	var ard AppRelatedData
-	data, err := GetData(card, doAppRelData)
-	if err != nil {
-		return AppRelatedData{}, err
-	}
-
-	for _, c := range doAppRelData.getChildren() {
-		cData := doFindTLV(data, c.tag, 1)
-		buf := bytes.NewReader(cData)
-
-		switch c.tag {
-		case doAID.tag:
-			ard.AID, err = readAID(buf)
-		case doAlgoAttrSign.tag:
-			ard.AlgoAttrSign, err = readAlgoAttr(buf)
-		case doAlgoAttrEnc.tag:
-			ard.AlgoAttrEnc, err = readAlgoAttr(buf)
-		case doAlgoAttrAuth.tag:
-			ard.AlgoAttrAuth, err = readAlgoAttr(buf)
-		case doPWStatus.tag:
-			ard.PWStatus, err = readPWStatus(buf)
-		case doFingerprints.tag:
-			ard.Fingerprints, err = readFingerprints(buf)
-		case doKeyGenDate.tag:
-			ard.KeyGenDates, err = readKeyGenDates(buf)
-		}
-
-		if err != nil {
-			return AppRelatedData{}, err
-		}
-	}
-
-	return ard, nil
-}
-
-func readAID(buf *bytes.Reader) (AID, error) {
-	var aid AID
-
-	if err := binary.Read(buf, binary.BigEndian, &aid.RID); err != nil {
-		return AID{}, err
-	}
-	if err := binary.Read(buf, binary.BigEndian, &aid.App); err != nil {
-		return AID{}, err
-	}
-	for _, a := range []*[2]byte{&aid.Version, &aid.Manufacturer} {
-		if err := binary.Read(buf, binary.BigEndian, a); err != nil {
-			return AID{}, err
-		}
-	}
-	if err := binary.Read(buf, binary.BigEndian, &aid.Serial); err != nil {
-		return AID{}, err
-	}
-	if err := binary.Read(buf, binary.BigEndian, &aid.RFU); err != nil {
-		return AID{}, err
-	}
-
-	return aid, nil
-}
-
-func readAlgoAttr(buf *bytes.Reader) (AlgoAttr, error) {
-	var aa AlgoAttr
-
-	if err := binary.Read(buf, binary.BigEndian, &aa.ID); err != nil {
-		return AlgoAttr{}, err
-	}
-
-	switch aa.ID {
-	case AlgoIdRSA:
-		for _, a := range []*[2]byte{&aa.RSAModLen, &aa.RSAPubKeyExpLen} {
-			if err := binary.Read(buf, binary.BigEndian, a); err != nil {
-				return AlgoAttr{}, err
-			}
-		}
-	case AlgoIdECDH, AlgoIdECDSA:
-		aa.ECurveOID = make([]byte, buf.Len()-1)
-		if err := binary.Read(buf, binary.BigEndian, &aa.ECurveOID); err != nil {
-			return AlgoAttr{}, err
-		}
-
-	}
-
-	if err := binary.Read(buf, binary.BigEndian, &aa.PrivKeyImpFmt); err != nil {
-		return AlgoAttr{}, err
-	}
-
-	return aa, nil
-}
-
-func readPWStatus(buf *bytes.Reader) (PWStatus, error) {
-	var pws PWStatus
-	pwb := []*byte{&pws.PW1Validity, &pws.PW1MaxLenFmt, &pws.PW1MaxLenRC,
-		&pws.PW3MaxLenFmt, &pws.PW1RetryCtr, &pws.PW1RCRetryCtr, &pws.PW3RetryCtr}
-
-	for _, p := range pwb {
-		if err := binary.Read(buf, binary.BigEndian, p); err != nil {
-			return PWStatus{}, err
-		}
-	}
-
-	return pws, nil
-}
-
-func readFingerprints(buf *bytes.Reader) (Fingerprints, error) {
-	var fps Fingerprints
-
-	for _, fp := range []*[20]byte{&fps.Sign, &fps.Enc, &fps.Auth} {
-		if err := binary.Read(buf, binary.BigEndian, fp); err != nil {
-			return Fingerprints{}, err
-		}
-	}
-
-	return fps, nil
-}
-
-func readKeyGenDates(buf *bytes.Reader) (KeyGenDates, error) {
-	var kgds KeyGenDates
-
-	for _, kgd := range []*[4]byte{&kgds.Sign, &kgds.Enc, &kgds.Auth} {
-		if err := binary.Read(buf, binary.BigEndian, kgd); err != nil {
-			return KeyGenDates{}, err
-		}
-	}
-
-	return kgds, nil
-}
-
 // Connect establishes the system context and opens sessions with all available
 // YubiKeys.
 func (yks *YubiKeys) Connect() error {
@@ -349,11 +136,11 @@ func (yks *YubiKeys) Connect() error {
 		yk.ReaderLabel = re.ReplaceAllString(r, "$1")
 		yk.Card = card
 
-		if yk.CardRelatedData, err = GetCardRelatedData(card); err != nil {
+		if err = yk.refreshCardRelatedData(); err != nil {
 			return err
 		}
 
-		if yk.AppRelatedData, err = GetAppRelatedData(card); err != nil {
+		if err = yk.refreshAppRelatedData(); err != nil {
 			return err
 		}
 
@@ -445,5 +232,217 @@ func (yk *YubiKey) SetCachedPIN(bank uint8, pin []byte) error {
 	}
 
 	yk.PINCache[bank-1] = pin
+	return nil
+}
+
+func waitUntilCardsPresent(ctx *scard.Context, readers []string) ([]string, error) {
+	start := time.Now()
+	var presentReaders []string
+	rs := make([]scard.ReaderState, len(readers))
+
+	for i := range rs {
+		rs[i].Reader = readers[i]
+		rs[i].CurrentState = scard.StateUnaware
+	}
+
+	for {
+		ready := 0
+		for i := range rs {
+			rs[i].CurrentState = rs[i].EventState
+			if rs[i].EventState&scard.StatePresent != 0 {
+				ready++
+
+				for _, pr := range presentReaders {
+					if pr == readers[i] {
+						continue
+					}
+				}
+
+				presentReaders = append(presentReaders, readers[i])
+			}
+
+		}
+
+		if ready == len(readers) {
+			return presentReaders, nil
+		}
+
+		err := ctx.GetStatusChange(rs, time.Duration(scardPresentTimeout)*time.Second)
+		if err != nil {
+			return nil, err
+		}
+
+		if time.Since(start) > time.Duration(scardGetStatusChangeTimeout)*time.Second {
+			return presentReaders, nil
+		}
+	}
+}
+
+func getPINRetries(card *scard.Card) (int, error) {
+	data, err := GetData(card, doPWStatus)
+	if err != nil {
+		return 0, err
+	}
+
+	return int(data[4]), nil
+}
+
+func (yk *YubiKey) refreshCardRelatedData() error {
+	crd := &yk.CardRelatedData
+
+	data, err := GetData(yk.Card, doCardRelData)
+	if err != nil {
+		return err
+	}
+
+	for _, c := range doCardRelData.getChildren() {
+		cData := doFindTLV(data, c.tag, 1)
+		buf := bytes.NewReader(cData)
+
+		switch c.tag {
+		case doName.tag:
+			crd.Name = make([]byte, buf.Len())
+			if err := binary.Read(buf, binary.BigEndian, &crd.Name); err != nil {
+				return err
+			}
+		case doLangPrefs.tag:
+			crd.LanguagePrefs = make([]byte, buf.Len())
+			if err := binary.Read(buf, binary.BigEndian, &crd.LanguagePrefs); err != nil {
+				return err
+			}
+		case doSalutation.tag:
+			if err := binary.Read(buf, binary.BigEndian, &crd.Salutation); err != nil {
+				return err
+			}
+		}
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (yk *YubiKey) refreshAppRelatedData() error {
+	ard := &yk.AppRelatedData
+
+	data, err := GetData(yk.Card, doAppRelData)
+	if err != nil {
+		return err
+	}
+
+	for _, c := range doAppRelData.getChildren() {
+		cData := doFindTLV(data, c.tag, 1)
+		buf := bytes.NewReader(cData)
+
+		switch c.tag {
+		case doAID.tag:
+			err = ard.AID.deserialize(buf)
+		case doAlgoAttrSign.tag:
+			err = ard.AlgoAttrSign.deserialize(buf)
+		case doAlgoAttrEnc.tag:
+			err = ard.AlgoAttrEnc.deserialize(buf)
+		case doAlgoAttrAuth.tag:
+			err = ard.AlgoAttrAuth.deserialize(buf)
+		case doPWStatus.tag:
+			err = ard.PWStatus.deserialize(buf)
+		case doFingerprints.tag:
+			err = ard.Fingerprints.deserialize(buf)
+		case doKeyGenDate.tag:
+			err = ard.KeyGenDates.deserialize(buf)
+		}
+
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (aid *AID) deserialize(r *bytes.Reader) (err error) {
+	if _, err = io.ReadFull(r, aid.RID[:]); err != nil {
+		return
+	}
+
+	if aid.App, err = r.ReadByte(); err != nil {
+		return err
+	}
+
+	for _, a := range []*[2]byte{&aid.Version, &aid.Manufacturer} {
+		if _, err := io.ReadFull(r, a[:]); err != nil {
+			return err
+		}
+	}
+
+	if _, err := io.ReadFull(r, aid.Serial[:]); err != nil {
+		return err
+	}
+
+	if _, err := io.ReadFull(r, aid.RFU[:]); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (aa *AlgoAttr) deserialize(r *bytes.Reader) (err error) {
+	if aa.ID, err = r.ReadByte(); err != nil {
+		return err
+	}
+
+	switch aa.ID {
+	case AlgoIdRSA:
+		for _, a := range []*[2]byte{&aa.RSAModLen, &aa.RSAPubKeyExpLen} {
+			if _, err := io.ReadFull(r, a[:]); err != nil {
+				return err
+			}
+		}
+	case AlgoIdECDH, AlgoIdECDSA:
+		aa.ECurveOID = make([]byte, r.Len()-1)
+		if _, err := io.ReadFull(r, aa.ECurveOID); err != nil {
+			return err
+		}
+
+	}
+
+	if aa.PrivKeyImpFmt, err = r.ReadByte(); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (pws *PWStatus) deserialize(r *bytes.Reader) (err error) {
+	pwb := []*byte{&pws.PW1Validity, &pws.PW1MaxLenFmt, &pws.PW1MaxLenRC,
+		&pws.PW3MaxLenFmt, &pws.PW1RetryCtr, &pws.PW1RCRetryCtr, &pws.PW3RetryCtr}
+
+	for _, p := range pwb {
+		*p, err = r.ReadByte()
+		if err != nil {
+			return
+		}
+	}
+
+	return
+}
+
+func (fps *Fingerprints) deserialize(r *bytes.Reader) error {
+	for _, fp := range []*[20]byte{&fps.Sign, &fps.Enc, &fps.Auth} {
+		if _, err := io.ReadFull(r, fp[:]); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (kgds *KeyGenDates) deserialize(r *bytes.Reader) error {
+	for _, kgd := range []*[4]byte{&kgds.Sign, &kgds.Enc, &kgds.Auth} {
+		if _, err := io.ReadFull(r, kgd[:]); err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
