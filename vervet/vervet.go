@@ -2,7 +2,6 @@ package vervet
 
 import (
 	"encoding/binary"
-	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -80,57 +79,65 @@ func ListVaultStatus(vaultAddr string) error {
 	return nil
 }
 
-// ListYubiKeys will output the connected YubiKeys and basic details.
+// ListYubiKeys will output the basic details of connected YubiKeys.
 func ListYubiKeys() error {
 	// connect YubiKey smart card interface, disconnect on return
-	yk := new(yubikeyscard.YubiKey)
-	if err := yk.Connect(); err != nil {
+	yks := new(yubikeyscard.YubiKeys)
+	if err := yks.Connect(); err != nil {
 		return err
 	}
 
-	defer yk.Disconnect()
+	defer yks.Disconnect()
 
-	ard := yk.AppRelatedData
-	crd := yk.CardRelatedData
+	for i, yk := range yks.YubiKeys {
+		ard := yk.AppRelatedData
+		crd := yk.CardRelatedData
 
-	PrintHeader(yk.ReaderLabel)
-	PrintKV("Manufacturer", "Yubico")
-	PrintKV("Serial number", fmt.Sprintf("%x", ard.AID.Serial))
+		PrintHeader(fmt.Sprint(i+1, ": ", yk.ReaderLabel))
+		PrintKV("Manufacturer", "Yubico")
+		PrintKV("Serial number", fmt.Sprintf("%x", ard.AID.Serial))
 
-	if crd.Name != nil {
-		PrintKV("Name of cardholder", strings.Replace(fmt.Sprintf("%s", crd.Name), "<<", " ", -1))
+		if crd.Name != nil {
+			PrintKV("Name of cardholder", strings.Replace(fmt.Sprintf("%s", crd.Name), "<<", " ", -1))
+		}
+
+		PrintKV("Signature key", fmt.Sprintf("rsa%d/%s",
+			binary.BigEndian.Uint16(ard.AlgoAttrSign.RSAModLen[:]),
+			fmtFingerprintTerse(ard.Fingerprints.Sign)))
+		PrintKV("Encryption key", fmt.Sprintf("rsa%d/%s",
+			binary.BigEndian.Uint16(ard.AlgoAttrEnc.RSAModLen[:]),
+			fmtFingerprintTerse(ard.Fingerprints.Enc)))
+		PrintKV("Authentication key", fmt.Sprintf("rsa%d/%s",
+			binary.BigEndian.Uint16(ard.AlgoAttrAuth.RSAModLen[:]),
+			fmtFingerprintTerse(ard.Fingerprints.Auth)))
+
+		if i < len(yks.YubiKeys)-1 {
+			fmt.Println()
+		}
 	}
-
-	PrintKV("Signature key", fmt.Sprintf("rsa%d/%s",
-		binary.BigEndian.Uint16(ard.AlgoAttrSign.RSAModLen[:]),
-		fmtFingerprintTerse(ard.Fingerprints.Sign)))
-	PrintKV("Encryption key", fmt.Sprintf("rsa%d/%s",
-		binary.BigEndian.Uint16(ard.AlgoAttrEnc.RSAModLen[:]),
-		fmtFingerprintTerse(ard.Fingerprints.Enc)))
-	PrintKV("Authentication key", fmt.Sprintf("rsa%d/%s",
-		binary.BigEndian.Uint16(ard.AlgoAttrAuth.RSAModLen[:]),
-		fmtFingerprintTerse(ard.Fingerprints.Auth)))
 
 	return nil
 }
 
-// ShowYubiKey will output the connected YubiKey and associated card and
-// application-related data.
-func ShowYubiKey() error {
+// ShowYubiKey will search the connected YubiKeys for the specified serial
+// number and output the details including smart card and application-related
+// data.
+func ShowYubiKey(sn string) error {
 	// connect YubiKey smart card interface, disconnect on return
-	yk := new(yubikeyscard.YubiKey)
-	if err := yk.Connect(); err != nil {
+	yks := new(yubikeyscard.YubiKeys)
+	if err := yks.Connect(); err != nil {
 		return err
 	}
 
-	defer yk.Disconnect()
+	defer yks.Disconnect()
+
+	yk := yks.FindBySN(sn)
+	if yk == nil {
+		return fmt.Errorf("could not locate YubiKey that supports OpenPGP with serial number '%s'", sn)
+	}
 
 	ard := yk.AppRelatedData
 	crd := yk.CardRelatedData
-
-	if ard.AID.Manufacturer[1] != 6 {
-		return errors.New("unknown manufacturer, only Yubico yks supported")
-	}
 
 	PrintHeader("YubiKey Status")
 

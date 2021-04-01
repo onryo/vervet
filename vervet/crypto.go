@@ -19,16 +19,16 @@ const (
 // decryptUnsealKeys wraps decryptUnsealKey to decrypt a slice of unseal keys
 // and provide console messages.
 func decryptUnsealKeys(encryptedKeys []string) ([]string, error) {
-	yk := new(yubikeyscard.YubiKey)
-	if err := yk.Connect(); err != nil {
+	yks := new(yubikeyscard.YubiKeys)
+	if err := yks.Connect(); err != nil {
 		return nil, err
 	}
 
-	defer yk.Disconnect()
+	defer yks.Disconnect()
 
 	var keys []string
 	for _, ek := range encryptedKeys {
-		key, err := decryptUnsealKey(yk, ek)
+		key, err := decryptUnsealKey(yks, ek)
 		if err != nil {
 			PrintWarning(err.Error())
 		} else {
@@ -48,7 +48,7 @@ func decryptUnsealKeys(encryptedKeys []string) ([]string, error) {
 
 // decryptUnsealKey performs a base64 decode, then decrypts a PGP-encrypted
 // Vault unseal key.
-func decryptUnsealKey(yk *yubikeyscard.YubiKey, cipherTxtB64 string) (unsealKey string, err error) {
+func decryptUnsealKey(yks *yubikeyscard.YubiKeys, cipherTxtB64 string) (unsealKey string, err error) {
 	encryptedKey, err := base64.StdEncoding.DecodeString(cipherTxtB64)
 	if err != nil {
 		err = errors.New("encrypted unseal key is not base64 encoded")
@@ -57,7 +57,7 @@ func decryptUnsealKey(yk *yubikeyscard.YubiKey, cipherTxtB64 string) (unsealKey 
 
 	retries := 1
 	for retries > 0 {
-		plainTxtBytes, retries, err := yubikeypgp.Decrypt(yk, encryptedKey, promptPIN)
+		plainTxtBytes, retries, err := yubikeypgp.Decrypt(yks, encryptedKey, promptPIN)
 		if err != nil {
 			if retries == 0 {
 				return "", errors.New("PIN bank locked, no retries remaining")

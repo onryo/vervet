@@ -34,15 +34,16 @@ type encryptedKeyPacket struct {
 // encrypted portion of the message and return the resultant plain text.
 // In the event of an incorrect PIN, Decrypt will return an empty byte array
 // and the number of remaining PIN retries.
-func Decrypt(yk *yubikeyscard.YubiKey, cipherTxt []byte, prompt PinPromptFunction) ([]byte, int, error) {
+func Decrypt(yks *yubikeyscard.YubiKeys, cipherTxt []byte, prompt PinPromptFunction) ([]byte, int, error) {
 	// read encrypted key packet fields and deserialize to struct
 	ek, err := readEncKeyPacket(bytes.NewReader(cipherTxt))
 	if err != nil {
 		return nil, -1, err
 	}
 
-	// verify that YubiKey has the decryption key needed
-	if !ykHasKey(yk, ek.keyID) {
+	// locate YubiKey with matching decryption key
+	yk := yks.FindByKeyID(ek.keyID)
+	if yk == nil {
 		return nil, -1, errors.New("decryption key could not be found on YubiKey")
 	}
 
@@ -189,16 +190,4 @@ func readSymEncPacket(r io.Reader, key []byte, cipherFunc packet.CipherFunction)
 			return nil, errors.New("unexpected PGP packet type encountered")
 		}
 	}
-}
-
-func ykHasKey(yk *yubikeyscard.YubiKey, keyId uint64) bool {
-	fps := yk.AppRelatedData.Fingerprints
-
-	for _, fp := range [][20]byte{fps.Sign, fps.Enc, fps.Auth} {
-		if binary.BigEndian.Uint64(fp[12:20]) == keyId {
-			return true
-		}
-	}
-
-	return false
 }

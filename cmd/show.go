@@ -48,11 +48,14 @@ var showClusterSubCmd = &cobra.Command{
 }
 
 var showYubikeySubCmd = &cobra.Command{
-	Use:   "yubikey",
+	Use:   "yubikey <serial number>",
 	Short: "Show YubiKey details",
 	Long:  `Show YubiKey details returned from OpenPGP application data objects.`,
+	Args:  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
-		err := vervet.ShowYubiKey()
+		sn := args[0]
+
+		err := vervet.ShowYubiKey(sn)
 		if err != nil {
 			vervet.PrintFatal(err.Error(), 1)
 		}

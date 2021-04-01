@@ -4,12 +4,12 @@ import (
 	"bytes"
 	"encoding/binary"
 	"errors"
-	"strings"
+	"fmt"
+	"regexp"
+	"time"
 
 	"github.com/ebfe/scard"
 )
-
-// YubiKeys represents the system context and slice of connected smart cards
 
 const (
 	AlgoIdRSA   uint8 = 1
@@ -17,8 +17,19 @@ const (
 	AlgoIdECDSA uint8 = 13
 )
 
+const (
+	scardPresentTimeout         int = 1
+	scardGetStatusChangeTimeout int = 5
+)
+
+var yubikeyManufacturerID = [2]byte{0, 6}
+
+type YubiKeys struct {
+	YubiKeys []*YubiKey
+	Context  *scard.Context
+}
+
 type YubiKey struct {
-	Context         *scard.Context
 	Card            *scard.Card
 	ReaderLabel     string
 	CardRelatedData CardRelatedData
@@ -81,25 +92,45 @@ type KeyGenDates struct {
 	Auth [4]byte
 }
 
-var yubikeyReaderID = "Yubico YubiKey OTP+FIDO+CCID"
-
-func waitUntilCardPresent(ctx *scard.Context, readers []string) (int, error) {
+func waitUntilCardsPresent(ctx *scard.Context, readers []string) ([]string, error) {
+	start := time.Now()
+	var presentReaders []string
 	rs := make([]scard.ReaderState, len(readers))
+
 	for i := range rs {
 		rs[i].Reader = readers[i]
 		rs[i].CurrentState = scard.StateUnaware
 	}
 
 	for {
+		ready := 0
 		for i := range rs {
-			if rs[i].EventState&scard.StatePresent != 0 {
-				return i, nil
-			}
 			rs[i].CurrentState = rs[i].EventState
+			if rs[i].EventState&scard.StatePresent != 0 {
+				ready++
+
+				for _, pr := range presentReaders {
+					if pr == readers[i] {
+						continue
+					}
+				}
+
+				presentReaders = append(presentReaders, readers[i])
+			}
+
 		}
-		err := ctx.GetStatusChange(rs, -1)
+
+		if ready == len(readers) {
+			return presentReaders, nil
+		}
+
+		err := ctx.GetStatusChange(rs, time.Duration(scardPresentTimeout)*time.Second)
 		if err != nil {
-			return -1, err
+			return nil, err
+		}
+
+		if time.Since(start) > time.Duration(scardGetStatusChangeTimeout)*time.Second {
+			return presentReaders, nil
 		}
 	}
 }
@@ -275,50 +306,49 @@ func readKeyGenDates(buf *bytes.Reader) (KeyGenDates, error) {
 	return kgds, nil
 }
 
-// ConnectYubiKeys establishes the system context and opens sessions with all available smart card readers
-func (yk *YubiKey) Connect() error {
-	// Establish a context
+// Connect establishes the system context and opens sessions with all available
+// YubiKeys.
+func (yks *YubiKeys) Connect() error {
+	// establish system context
 	ctx, err := scard.EstablishContext()
 	if err != nil {
 		return err
 	}
 
-	yk.Context = ctx
+	yks.Context = ctx
 
-	// List available readers
+	// list available smart card readers
 	readers, err := ctx.ListReaders()
 	if err != nil {
 		return err
 	}
 
-	// Ignore other smart cards
-	var yks []string
-	for _, r := range readers {
-		if strings.HasPrefix(r, yubikeyReaderID) {
-			yks = append(yks, r)
-		}
+	// wait for all smards card to reach present state
+	presentReaders, err := waitUntilCardsPresent(ctx, readers)
+	if err != nil {
+		return err
 	}
 
-	if len(yks) > 0 {
-		// wait for card
-		i, err := waitUntilCardPresent(ctx, yks)
+	// ignore other smart cards
+	for _, r := range presentReaders {
+		yk := new(YubiKey)
+
+		// connect to card
+		card, err := ctx.Connect(r, scard.ShareExclusive, scard.ProtocolAny)
 		if err != nil {
 			return err
 		}
 
-		// Connect to card
-		card, err := ctx.Connect(yks[i], scard.ShareExclusive, scard.ProtocolAny)
-		if err != nil {
-			return err
+		// skip smart cards that do not support the OpenPGP applet
+		if err = SelectApp(card); err != nil {
+			continue
 		}
 
-		// if card supports OpenPGP applet, select application, and add it to cards
-		if err = SelectApp(card); err == nil {
-			yk.ReaderLabel = yks[i]
-			yk.Card = card
-		}
+		// build YubiKey struct
+		re := regexp.MustCompile("^(.*?) [0-9]{2}$")
+		yk.ReaderLabel = re.ReplaceAllString(r, "$1")
+		yk.Card = card
 
-		// Populate card and application-related data.
 		if yk.CardRelatedData, err = GetCardRelatedData(card); err != nil {
 			return err
 		}
@@ -326,26 +356,73 @@ func (yk *YubiKey) Connect() error {
 		if yk.AppRelatedData, err = GetAppRelatedData(card); err != nil {
 			return err
 		}
-	} else {
+
+		// skip smart cards not manufactured by YubiCo
+		if yk.AppRelatedData.AID.Manufacturer != yubikeyManufacturerID {
+			continue
+		}
+
+		yks.YubiKeys = append(yks.YubiKeys, yk)
+	}
+
+	// if no YubiKeys are found, release context, and throw error
+	if len(yks.YubiKeys) == 0 {
+		// Release reader context
+		err = ctx.Release()
+		if err != nil {
+			return err
+		}
+
 		return errors.New("no YubiKeys found")
 	}
 
 	return nil
 }
 
-// DisconnectYubiKeys disconnects all open sessions smart cards and
-// releases the system context
-func (yk *YubiKey) Disconnect() error {
-	// Disconnect cards by sending reset command
-	err := yk.Card.Disconnect(scard.ResetCard)
+// Disconnect will reset all open sessions smart cards and release the system
+// context.
+func (yks *YubiKeys) Disconnect() error {
+	for _, yk := range yks.YubiKeys {
+		// Disconnect card by sending reset command
+		err := yk.Card.Disconnect(scard.ResetCard)
+		if err != nil {
+			return err
+		}
+	}
+
+	// Release reader context
+	err := yks.Context.Release()
 	if err != nil {
 		return err
 	}
 
-	// Release reader context
-	err = yk.Context.Release()
-	if err != nil {
-		return err
+	return nil
+}
+
+// FindBySN will search the connected YubiKeys for matching serial numbers and
+// if found, will return a pointer to that YubiKey.
+func (yks *YubiKeys) FindBySN(sn string) *YubiKey {
+	for _, yk := range yks.YubiKeys {
+		if sn == fmt.Sprintf("%x", yk.AppRelatedData.AID.Serial) {
+			return yk
+		}
+	}
+
+	return nil
+}
+
+// FindByKeyID will search the connected YubiKeys for a matching PGP key ID and
+// if found, will return a pointer to that YubiKey.
+func (yks *YubiKeys) FindByKeyID(keyID uint64) *YubiKey {
+	for _, yk := range yks.YubiKeys {
+		fps := yk.AppRelatedData.Fingerprints
+
+		for _, fp := range [][20]byte{fps.Sign, fps.Enc, fps.Auth} {
+			if binary.BigEndian.Uint64(fp[12:20]) == keyID {
+				return yk
+			}
+		}
+
 	}
 
 	return nil
