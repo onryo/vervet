@@ -29,7 +29,7 @@ func Decipher(card *scard.Card, data []byte) ([]byte, error) {
 		return nil, err
 	}
 
-	if !ra.checkSuccess() {
+	if !ra.success() {
 		return nil, errors.New("decipher operation unsuccessful")
 	}
 
@@ -54,7 +54,7 @@ func GetData(card *scard.Card, do DataObject) ([]byte, error) {
 
 	data = append(data, ra.data...)
 
-	for !ra.checkSuccess() {
+	for !ra.success() {
 		if ra.sw1 == 0x61 {
 			ca = commandAPDU{
 				cla: 0,
@@ -93,7 +93,7 @@ func SelectApp(card *scard.Card) error {
 		return err
 	}
 
-	if !ra.checkSuccess() {
+	if !ra.success() {
 		return errors.New("this YubiKey does not support OpenPGP")
 	}
 
@@ -123,7 +123,7 @@ func Verify(card *scard.Card, bank uint8, pin []byte) (int, error) {
 		return -1, err
 	}
 
-	if !ra.checkSuccess() {
+	if !ra.success() {
 		retries, err := getPINRetries(card)
 		if err != nil {
 			return -1, err
