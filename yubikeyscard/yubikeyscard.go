@@ -296,22 +296,22 @@ func (yk *YubiKey) refreshCardRelatedData() error {
 	}
 
 	for _, c := range doCardRelData.getChildren() {
-		cData := doFindTLV(data, c.tag, 1)
-		buf := bytes.NewReader(cData)
+		d := doFindTLV(data, c.tag, 1)
+		r := bytes.NewReader(d)
 
 		switch c.tag {
 		case doName.tag:
-			crd.Name = make([]byte, buf.Len())
-			if err := binary.Read(buf, binary.BigEndian, &crd.Name); err != nil {
+			crd.Name = make([]byte, r.Len())
+			if _, err := io.ReadFull(r, crd.Name); err != nil {
 				return err
 			}
 		case doLangPrefs.tag:
-			crd.LanguagePrefs = make([]byte, buf.Len())
-			if err := binary.Read(buf, binary.BigEndian, &crd.LanguagePrefs); err != nil {
+			crd.LanguagePrefs = make([]byte, r.Len())
+			if _, err := io.ReadFull(r, crd.LanguagePrefs); err != nil {
 				return err
 			}
 		case doSalutation.tag:
-			if err := binary.Read(buf, binary.BigEndian, &crd.Salutation); err != nil {
+			if crd.Salutation, err = r.ReadByte(); err != nil {
 				return err
 			}
 		}
