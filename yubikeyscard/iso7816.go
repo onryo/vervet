@@ -124,7 +124,7 @@ func Verify(card *scard.Card, bank uint8, pin []byte) (int, error) {
 	}
 
 	if !ra.success() {
-		retries, err := getPINRetries(card)
+		retries, err := pw1PINRetries(card)
 		if err != nil {
 			return -1, err
 		}

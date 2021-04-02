@@ -278,7 +278,7 @@ func waitUntilCardsPresent(ctx *scard.Context, readers []string) ([]string, erro
 	}
 }
 
-func getPINRetries(card *scard.Card) (int, error) {
+func pw1PINRetries(card *scard.Card) (int, error) {
 	data, err := GetData(card, doPWStatus)
 	if err != nil {
 		return 0, err
