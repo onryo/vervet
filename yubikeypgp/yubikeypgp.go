@@ -49,7 +49,7 @@ func Decrypt(yks *yubikeyscard.YubiKeys, cipherTxt []byte, prompt PinPromptFunct
 	}
 
 	// check if PIN is cached, if not retrieve PIN input from user, then validate format
-	pin := yk.GetCachedPIN(2)
+	pin := yk.CachedPIN(2)
 
 	if pin == nil {
 		pin, err = prompt()

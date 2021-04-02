@@ -64,27 +64,27 @@ var DataObjects = []DataObject{
 	doAESKeyData, doUIFSig, doUIFDec, doUIFAut, doUIFAtt, doKDFDO, doAlgoInfo,
 }
 
-func (do DataObject) tagBytes() []byte {
+func (do *DataObject) tagBytes() []byte {
 	b := make([]byte, 2)
 	binary.BigEndian.PutUint16(b, uint16(do.tag))
 	return b
 }
 
-func (do DataObject) tagP1() byte {
+func (do *DataObject) tagP1() byte {
 	return do.tagBytes()[0]
 }
 
-func (do DataObject) tagP2() byte {
+func (do *DataObject) tagP2() byte {
 	return do.tagBytes()[1]
 }
 
-func (do DataObject) parentBytes() []byte {
+func (do *DataObject) parentBytes() []byte {
 	b := make([]byte, 2)
 	binary.BigEndian.PutUint16(b, uint16(do.parent))
 	return b
 }
 
-func (do DataObject) getChildren() []DataObject {
+func (do *DataObject) children() []DataObject {
 	var c []DataObject
 
 	for _, d := range DataObjects {
