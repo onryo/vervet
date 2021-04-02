@@ -215,9 +215,9 @@ func (yks *YubiKeys) FindByKeyID(keyID uint64) *YubiKey {
 	return nil
 }
 
-// GetCachedPIN returns the cached PIN for the provided bank if available. If PIN is not
-// cached, GetCachedPIN will return nil.
-func (yk *YubiKey) GetCachedPIN(bank uint8) []byte {
+// CachedPIN returns the cached PIN for the provided bank if available. If PIN is not
+// cached, CachedPIN will return nil.
+func (yk *YubiKey) CachedPIN(bank uint8) []byte {
 	if bank < 1 || bank > 3 {
 		return nil
 	}
@@ -295,7 +295,7 @@ func (yk *YubiKey) refreshCardRelatedData() error {
 		return err
 	}
 
-	for _, c := range doCardRelData.getChildren() {
+	for _, c := range doCardRelData.children() {
 		d := doFindTLV(data, c.tag, 1)
 		r := bytes.NewReader(d)
 
@@ -331,7 +331,7 @@ func (yk *YubiKey) refreshAppRelatedData() error {
 		return err
 	}
 
-	for _, c := range doAppRelData.getChildren() {
+	for _, c := range doAppRelData.children() {
 		cData := doFindTLV(data, c.tag, 1)
 		buf := bytes.NewReader(cData)
 

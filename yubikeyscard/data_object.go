@@ -84,7 +84,7 @@ func (do *DataObject) parentBytes() []byte {
 	return b
 }
 
-func (do *DataObject) getChildren() []DataObject {
+func (do *DataObject) children() []DataObject {
 	var c []DataObject
 
 	for _, d := range DataObjects {
