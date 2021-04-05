@@ -20,6 +20,15 @@ const (
 
 type PinPromptFunction func() ([]byte, error)
 
+// MessageDetails contains the result of parsing an OpenPGP encrypted and/or
+// signed message.
+type MessageDetails struct {
+	IsEncrypted   bool                  // true if the message was encrypted.
+	DecryptedWith uint64                // key ID of decryption key used to decrypt session key
+	YubiKey       *yubikeyscard.YubiKey // YubiKey containing private key used to decrypt session key
+	Body          []byte                // the contents of the message.
+}
+
 type encryptedKeyPacket struct {
 	tag            uint8
 	length         int
@@ -30,22 +39,28 @@ type encryptedKeyPacket struct {
 	encryptedBytes []byte
 }
 
-// Decrypt will decrypt a PGP-encrypted message by using a YubiKey to first
+// ReadMessage will decrypt a PGP-encrypted message by using a YubiKey to first
 // obtain the session key (DEK). Decrypt will then decrypt the symmetrically
 // encrypted portion of the message and return the resultant plain text.
 // In the event of an incorrect PIN, Decrypt will return an empty byte array
 // and the number of remaining PIN retries.
-func Decrypt(yks *yubikeyscard.YubiKeys, cipherTxt []byte, prompt PinPromptFunction) ([]byte, int, error) {
+func ReadMessage(yks *yubikeyscard.YubiKeys, msg []byte, prompt PinPromptFunction) (md *MessageDetails, retries int, err error) {
+	md = new(MessageDetails)
+	retries = -1
+
 	// read encrypted key packet fields and deserialize to struct
-	ek, err := readEncKeyPacket(bytes.NewReader(cipherTxt))
+	ek, err := readEncKeyPacket(bytes.NewReader(msg))
 	if err != nil {
-		return nil, -1, err
+		return
 	}
+
+	md.IsEncrypted = true
 
 	// locate YubiKey with matching decryption key
 	yk := yks.FindByKeyID(ek.keyID)
 	if yk == nil {
-		return nil, -1, fmt.Errorf("decryption key %X could not be found on any YubiKeys", ek.keyID)
+		err = fmt.Errorf("decryption key %X could not be found on any YubiKeys", ek.keyID)
+		return
 	}
 
 	// check if PIN is cached, if not retrieve PIN input from user, then validate format
@@ -54,14 +69,14 @@ func Decrypt(yks *yubikeyscard.YubiKeys, cipherTxt []byte, prompt PinPromptFunct
 	if pin == nil {
 		pin, err = prompt()
 		if err != nil {
-			return nil, -1, err
+			return
 		}
 	}
 
 	// verify the PIN (bank 2) with the OpenPGP smart card applet
-	retries, err := yubikeyscard.Verify(yk.Card, 2, pin)
+	retries, err = yubikeyscard.Verify(yk.Card, 2, pin)
 	if err != nil {
-		return nil, retries, err
+		return
 	} else {
 		// add verified PIN to the cache
 		yk.SetCachedPIN(2, pin)
@@ -70,26 +85,34 @@ func Decrypt(yks *yubikeyscard.YubiKeys, cipherTxt []byte, prompt PinPromptFunct
 	// decipher the session key
 	sk, err := yubikeyscard.Decipher(yk.Card, ek.encryptedBytes)
 	if err != nil {
-		return nil, retries, err
+		return
 	}
 
 	if len(sk) != (sessionKeyLength + 3) {
-		return nil, retries, errors.New("unable to decipher PGP session key")
+		err = errors.New("unable to decipher PGP session key")
+		return
 	}
 
 	// get cipher function from first octect
 	c := packet.CipherFunction(sk[0])
 	if c != packet.CipherAES128 {
-		return nil, retries, errors.New("unsupported cipher function, only AES-128-CFB supported")
+		err = errors.New("unsupported cipher function, only AES-128-CFB supported")
+		return
 	}
 
 	// after cipher function, the next 16 bytes contain the session key
 	sessionKey := sk[1 : sessionKeyLength+1]
 
 	// read the message from the symmetrically encrypted packet using session key
-	plainTxt, err := readSymEncPacket(bytes.NewReader(cipherTxt[ek.length:]), sessionKey, c)
+	md.Body, err = readSymEncPacket(bytes.NewReader(msg[ek.length:]), sessionKey, c)
+	if err != nil {
+		return
+	}
 
-	return plainTxt, retries, err
+	md.DecryptedWith = ek.keyID
+	md.YubiKey = yk
+
+	return
 }
 
 func readHeader(r io.Reader) (tag uint8, length int, contents io.Reader, err error) {
@@ -125,7 +148,8 @@ func readEncKeyPacket(r io.Reader) (ek encryptedKeyPacket, err error) {
 	}
 
 	if tag != 1 {
-		return ek, errors.New("invalid PGP packet type, only encrypted key and symmetrically encrypted packets supported")
+		err = errors.New("invalid PGP packet type, only encrypted key and symmetrically encrypted packets supported")
+		return
 	}
 
 	n, err := io.ReadFull(contents, buf[:])
@@ -134,15 +158,18 @@ func readEncKeyPacket(r io.Reader) (ek encryptedKeyPacket, err error) {
 	}
 
 	if n != encryptedKeyPacketKeyInfoLength {
-		return ek, errors.New("invalid PGP packet, body too short")
+		err = errors.New("invalid PGP packet, body too short")
+		return
 	}
 
 	if buf[0] != 3 {
-		return ek, errors.New("invalid PGP encrypted key packet, only version 3 supported")
+		err = errors.New("invalid PGP encrypted key packet, only version 3 supported")
+		return
 	}
 
 	if buf[9] != uint8(packet.PubKeyAlgoRSA) {
-		return encryptedKeyPacket{}, errors.New("invalid PGP encrypted key packet, only RSA supported")
+		err = errors.New("invalid PGP encrypted key packet, only RSA supported")
+		return
 	}
 
 	ek.tag = tag
@@ -153,13 +180,15 @@ func readEncKeyPacket(r io.Reader) (ek encryptedKeyPacket, err error) {
 	ek.keySize = binary.BigEndian.Uint16(buf[10:12])
 
 	ek.encryptedBytes = make([]byte, length-(encryptedKeyPacketHeaderLength+encryptedKeyPacketKeyInfoLength))
-	if err = binary.Read(contents, binary.BigEndian, &ek.encryptedBytes); err != nil {
+	if _, err = io.ReadFull(contents, ek.encryptedBytes); err != nil {
 		return
 	}
 
 	return ek, nil
 }
 
+// readSymEncPacket decrypts the symmetrically encypted portion of the message
+// with the provided session key and cipher function.
 func readSymEncPacket(r io.Reader, key []byte, cipherFunc packet.CipherFunction) ([]byte, error) {
 	packets := packet.NewReader(r)
 
@@ -170,7 +199,6 @@ func readSymEncPacket(r io.Reader, key []byte, cipherFunc packet.CipherFunction)
 		}
 
 		switch p := p.(type) {
-
 		case *packet.SymmetricallyEncrypted:
 			decrypted, err := p.Decrypt(cipherFunc, key)
 			if err != nil {
@@ -181,12 +209,12 @@ func readSymEncPacket(r io.Reader, key []byte, cipherFunc packet.CipherFunction)
 				return nil, err
 			}
 		case *packet.LiteralData:
-			msg, err := io.ReadAll(p.Body)
+			body, err := io.ReadAll(p.Body)
 			if err != nil {
 				return nil, err
 			}
 
-			return msg, nil
+			return body, nil
 		default:
 			return nil, errors.New("unexpected PGP packet type encountered")
 		}

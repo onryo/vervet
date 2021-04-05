@@ -57,7 +57,7 @@ func decryptUnsealKey(yks *yubikeyscard.YubiKeys, cipherTxtB64 string) (unsealKe
 
 	retries := 1
 	for retries > 0 {
-		plainTxtBytes, retries, err := yubikeypgp.Decrypt(yks, encryptedKey, promptPIN)
+		md, retries, err := yubikeypgp.ReadMessage(yks, encryptedKey, promptPIN)
 		if err != nil {
 			switch {
 			case retries == 0:
@@ -70,7 +70,10 @@ func decryptUnsealKey(yks *yubikeyscard.YubiKeys, cipherTxtB64 string) (unsealKe
 			}
 		}
 
-		unsealKey = string(plainTxtBytes)
+		serial := md.YubiKey.AppRelatedData.AID.Serial
+		PrintInfo(fmt.Sprintf("decrypted unseal key with key ID %X found on YubiKey %x", md.DecryptedWith, serial))
+
+		unsealKey = string(md.Body)
 		break
 	}
 
