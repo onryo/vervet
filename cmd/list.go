@@ -9,7 +9,7 @@ import (
 
 func init() {
 	listCmd.AddCommand(listClustersSubCmd)
-	listCmd.AddCommand(listYubikeysSubCmd)
+	listCmd.AddCommand(listYubiKeysSubCmd)
 
 	rootCmd.AddCommand(listCmd)
 }
@@ -40,7 +40,7 @@ var listClustersSubCmd = &cobra.Command{
 	},
 }
 
-var listYubikeysSubCmd = &cobra.Command{
+var listYubiKeysSubCmd = &cobra.Command{
 	Use:   "yubikeys",
 	Short: "List connected YubiKeys",
 	Long:  `List overview of connected YubiKeys.`,

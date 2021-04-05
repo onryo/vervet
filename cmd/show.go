@@ -9,7 +9,7 @@ import (
 
 func init() {
 	showCmd.AddCommand(showClusterSubCmd)
-	showCmd.AddCommand(showYubikeySubCmd)
+	showCmd.AddCommand(showYubiKeySubCmd)
 
 	rootCmd.AddCommand(showCmd)
 }
@@ -47,7 +47,7 @@ var showClusterSubCmd = &cobra.Command{
 	},
 }
 
-var showYubikeySubCmd = &cobra.Command{
+var showYubiKeySubCmd = &cobra.Command{
 	Use:   "yubikey <serial number>",
 	Short: "Show YubiKey details",
 	Long:  `Show YubiKey details returned from OpenPGP application data objects.`,
