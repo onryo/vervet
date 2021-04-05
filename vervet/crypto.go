@@ -30,7 +30,7 @@ func decryptUnsealKeys(encryptedKeys []string) ([]string, error) {
 	for _, ek := range encryptedKeys {
 		key, err := decryptUnsealKey(yks, ek)
 		if err != nil {
-			PrintWarning(err.Error())
+			PrintError(err.Error())
 		} else {
 			keys = append(keys, key)
 		}
@@ -61,11 +61,11 @@ func decryptUnsealKey(yks *yubikeyscard.YubiKeys, cipherTxtB64 string) (unsealKe
 		if err != nil {
 			switch {
 			case retries == 0:
-				return "", errors.New("PIN bank locked, no retries remaining")
+				PrintFatal("PIN bank locked, no retries remaining", 1)
 			case retries < 0:
 				return "", err
 			default:
-				PrintError(err.Error())
+				PrintWarning(err.Error())
 				continue
 			}
 		}
