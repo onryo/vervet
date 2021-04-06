@@ -119,6 +119,6 @@ Vervet would not be possible without the following projects and resources.
 - [Cobra](https://github.com/spf13/cobra)
 - [Viper](https://github.com/spf13/viper)
 - [Functional Specification of the OpenPGP application on ISO Smart Card Operating Systems](https://gnupg.org/ftp/specs/OpenPGP-smart-card-application-3.4.pdf)
-- [RFC 4880 - OpenPGP Message Format](https://tools.ietf.org/html/rfc4880)
+- [RFC 4880](https://tools.ietf.org/html/rfc4880) - OpenPGP Message Format
 - [joe](https://github.com/karan/joe) - README file inspiration
 - [Dr. Duh's YubiKey Guide](https://github.com/drduh/YubiKey-Guide)
