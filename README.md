@@ -28,11 +28,11 @@ $ make install
 ### Commands:
 
 ```
-generate-root generate Vault root token
-help          Help about any command
-list          List connected YubiKeys and configured Vault clusters
-show          Show details of YubiKeys and Vault clusters
-unseal        Unseal Vault by server or cluster
+generate-root     Generate Vault root token
+help              Help about any command
+list              List connected YubiKeys and configured Vault clusters
+show              Show details of YubiKeys and Vault clusters
+unseal            Unseal Vault by server or cluster
 ```
 
 ### Configuration
