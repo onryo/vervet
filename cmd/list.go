@@ -27,9 +27,26 @@ var listClustersSubCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		i := 0
 		for name, cluster := range config.Clusters {
+			keys := cluster[0].Keys
+			if cluster[0].KeyFile != "" {
+				kf, err := vervet.ReadKeyFile(cluster[0].KeyFile)
+				if err != nil {
+					vervet.PrintFatal(err.Error(), 1)
+				}
+
+				keys = append(keys, kf...)
+			}
+
 			vervet.PrintHeader(name)
 			vervet.PrintKVSlice("Server(s)", cluster[0].Servers)
-			vervet.PrintKV("Key(s)", fmt.Sprintf("%d", len(cluster[0].Keys)))
+
+			uniqKeys := vervet.Unique(keys)
+			if len(keys) != len(uniqKeys) {
+				dupCount := len(keys) - len(uniqKeys)
+				vervet.PrintKV("Key(s)", fmt.Sprintf("%d (%d duplicates)", len(keys), dupCount))
+			} else {
+				vervet.PrintKV("Key(s)", fmt.Sprintf("%d", len(keys)))
+			}
 
 			if i < len(config.Clusters)-1 {
 				fmt.Println()

@@ -39,7 +39,24 @@ var showClusterSubCmd = &cobra.Command{
 
 		vervet.PrintHeader("Vault Cluster Status")
 		vervet.PrintKVSlice("Server(s)", cluster.Servers)
-		vervet.PrintKV("Key(s)", fmt.Sprintf("%d", len(cluster.Keys)))
+
+		keys := cluster.Keys
+		if cluster.KeyFile != "" {
+			kf, err := vervet.ReadKeyFile(cluster.KeyFile)
+			if err != nil {
+				vervet.PrintFatal(err.Error(), 1)
+			}
+
+			keys = append(keys, kf...)
+		}
+
+		uniqKeys := vervet.Unique(keys)
+		if len(keys) != len(uniqKeys) {
+			dupCount := len(keys) - len(uniqKeys)
+			vervet.PrintKV("Key(s)", fmt.Sprintf("%d (%d duplicates)", len(keys), dupCount))
+		} else {
+			vervet.PrintKV("Key(s)", fmt.Sprintf("%d", len(keys)))
+		}
 
 		if err := vervet.ListVaultStatus(cluster.Servers[0]); err != nil {
 			vervet.PrintFatal(err.Error(), 1)
