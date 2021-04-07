@@ -37,7 +37,7 @@ unseal            Unseal Vault by server or cluster
 
 ### Configuration
 
-The default vervet configuration file is `~/.vervet/vervet.hcl`. The configuration file location can be overridden at runtime with `--config` flag. Keys can be specified directly in the configuration file using the `keys` attribute. Alternatively, keys can be placed in a separate file located in the `~/.vervet` directory and linked via the `key_file` attribute.
+The default vervet configuration file location is `~/.vervet/vervet.hcl`. The configuration file can be overridden at runtime with the `--config` flag. Keys can be specified directly in the configuration file using the `keys` attribute. Alternatively, keys can be placed in a separate file and linked via the `key_file` attribute. Vervet will open key files relative to the `~/.vervet` directory. Keys located in a seprate key file should be base64 encoded and new line delimited. Any duplicate unseal keys will be automatically deduplicated. 
 
 ```hcl
 cluster "us-west" {
