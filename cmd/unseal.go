@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"os"
 	"vervet/vervet"
 
 	"github.com/spf13/cobra"
@@ -60,7 +61,28 @@ var unsealClusterSubCmd = &cobra.Command{
 			vervet.PrintFatal("no Vault servers in configuration", 1)
 		}
 
-		if err := vervet.Unseal(cluster.Servers, cluster.Keys); err != nil {
+		keys := cluster.Keys
+		if cluster.KeyFile != "" {
+			if _, err := os.Stat(cluster.KeyFile); os.IsNotExist(err) {
+				cd, err := getConfigDir()
+				if err != nil {
+					vervet.PrintFatal(err.Error(), 1)
+				}
+
+				os.Chdir(cd)
+			}
+
+			kf, err := vervet.ReadKeyFile(cluster.KeyFile)
+			if err != nil {
+				vervet.PrintFatal(err.Error(), 1)
+			}
+
+			keys = append(keys, kf...)
+		}
+
+		keys = vervet.Unique(keys)
+
+		if err := vervet.Unseal(cluster.Servers, keys); err != nil {
 			vervet.PrintFatal(err.Error(), 1)
 		}
 	},

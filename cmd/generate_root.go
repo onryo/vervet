@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"os"
 	"vervet/vervet"
 
 	"github.com/spf13/cobra"
@@ -22,7 +23,7 @@ func init() {
 
 var generateRootCmd = &cobra.Command{
 	Use:   "generate-root",
-	Short: "generate Vault root token",
+	Short: "Generate Vault root token",
 	Long:  `Decrypt the unseal key and generate root token for Vault cluster.`,
 }
 
@@ -63,7 +64,28 @@ var generateRootClusterSubCmd = &cobra.Command{
 			vervet.PrintFatal("no Vault servers in configuration", 1)
 		}
 
-		if err := vervet.GenerateRoot(cluster.Servers[0], cluster.Keys); err != nil {
+		keys := cluster.Keys
+		if cluster.KeyFile != "" {
+			if _, err := os.Stat(cluster.KeyFile); os.IsNotExist(err) {
+				cd, err := getConfigDir()
+				if err != nil {
+					vervet.PrintFatal(err.Error(), 1)
+				}
+
+				os.Chdir(cd)
+			}
+
+			kf, err := vervet.ReadKeyFile(cluster.KeyFile)
+			if err != nil {
+				vervet.PrintFatal(err.Error(), 1)
+			}
+
+			keys = append(keys, kf...)
+		}
+
+		keys = vervet.Unique(keys)
+
+		if err := vervet.GenerateRoot(cluster.Servers[0], keys); err != nil {
 			vervet.PrintFatal(err.Error(), 1)
 		}
 	},

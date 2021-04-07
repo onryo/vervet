@@ -33,6 +33,7 @@ type VervetConfig struct {
 type VaultClusterConfig struct {
 	Servers []string `hcl:"servers" mapstructure:"servers"`
 	Keys    []string `hcl:"keys" mapstructure:"keys"`
+	KeyFile string   `hcl:"key_file" mapstructure:"key_file"`
 }
 
 // Execute executes the root command.
@@ -92,4 +93,15 @@ func getVaultAddress(host string) string {
 	}
 
 	return url.String()
+}
+
+func getConfigDir() (string, error) {
+	home, err := homedir.Dir()
+	if err != nil {
+		return "", err
+	}
+
+	path := home + "/.vervet"
+
+	return path, nil
 }
