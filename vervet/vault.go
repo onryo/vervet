@@ -105,7 +105,6 @@ func (vault *vaultClient) generateRoot(keys []string) (*api.GenerateRootStatusRe
 			msg = fmt.Sprintf("%s - root token generation complete", vault.url.Host)
 			PrintSuccess(msg)
 
-			printGenRootStatus(resp)
 			return resp, nil
 		}
 	}
