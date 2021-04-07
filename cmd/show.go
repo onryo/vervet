@@ -33,22 +33,17 @@ var showClusterSubCmd = &cobra.Command{
 			vervet.PrintFatal(err.Error(), 1)
 		}
 
+		keys, err := cluster.keyring()
+		if err != nil {
+			vervet.PrintFatal(err.Error(), 1)
+		}
+
 		if len(cluster.Servers) == 0 {
 			vervet.PrintFatal("no Vault servers in configuration", 1)
 		}
 
 		vervet.PrintHeader("Vault Cluster Status")
 		vervet.PrintKVSlice("Server(s)", cluster.Servers)
-
-		keys := cluster.Keys
-		if cluster.KeyFile != "" {
-			kf, err := vervet.ReadKeyFile(cluster.KeyFile)
-			if err != nil {
-				vervet.PrintFatal(err.Error(), 1)
-			}
-
-			keys = append(keys, kf...)
-		}
 
 		uniqKeys := vervet.Unique(keys)
 		if len(keys) != len(uniqKeys) {

@@ -104,6 +104,20 @@ func getVaultAddress(host string) string {
 	return url.String()
 }
 
+func (vc *VaultClusterConfig) keyring() ([]string, error) {
+	keys := vc.Keys
+	if vc.KeyFile != "" {
+		kf, err := vervet.ReadKeyFile(vc.KeyFile)
+		if err != nil {
+			return nil, err
+		}
+
+		keys = append(keys, kf...)
+	}
+
+	return keys, nil
+}
+
 func getConfigDir() (string, error) {
 	home, err := homedir.Dir()
 	if err != nil {

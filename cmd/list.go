@@ -27,14 +27,9 @@ var listClustersSubCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		i := 0
 		for name, cluster := range config.Clusters {
-			keys := cluster[0].Keys
-			if cluster[0].KeyFile != "" {
-				kf, err := vervet.ReadKeyFile(cluster[0].KeyFile)
-				if err != nil {
-					vervet.PrintFatal(err.Error(), 1)
-				}
-
-				keys = append(keys, kf...)
+			keys, err := cluster[0].keyring()
+			if err != nil {
+				vervet.PrintFatal(err.Error(), 1)
 			}
 
 			vervet.PrintHeader(name)

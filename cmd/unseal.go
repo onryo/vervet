@@ -56,23 +56,16 @@ var unsealClusterSubCmd = &cobra.Command{
 			vervet.PrintFatal(err.Error(), 1)
 		}
 
+		keys, err := cluster.keyring()
+		if err != nil {
+			vervet.PrintFatal(err.Error(), 1)
+		}
+
 		if len(cluster.Servers) == 0 {
 			vervet.PrintFatal("no Vault servers in configuration", 1)
 		}
 
-		keys := cluster.Keys
-		if cluster.KeyFile != "" {
-			kf, err := vervet.ReadKeyFile(cluster.KeyFile)
-			if err != nil {
-				vervet.PrintFatal(err.Error(), 1)
-			}
-
-			keys = append(keys, kf...)
-		}
-
-		keys = vervet.Unique(keys)
-
-		if err := vervet.Unseal(cluster.Servers, keys); err != nil {
+		if err := vervet.Unseal(cluster.Servers, vervet.Unique(keys)); err != nil {
 			vervet.PrintFatal(err.Error(), 1)
 		}
 	},
