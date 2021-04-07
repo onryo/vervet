@@ -114,6 +114,29 @@ func PrintFatal(msg string, code int) {
 	os.Exit(code)
 }
 
+// Unique is a function that removes duplicate strings from a slice of strings
+// and returns the deduplicated slice.
+func Unique(orig []string) []string {
+	var dedup []string
+
+	for _, s := range orig {
+		present := false
+
+		for _, d := range dedup {
+			if s == d {
+				present = true
+				break
+			}
+		}
+
+		if !present {
+			dedup = append(dedup, s)
+		}
+	}
+
+	return dedup
+}
+
 // fmtFingerprint accepts a byte array containing a PGP fingerprint and
 // returns a formatted string that displays the fingerprint in 2-byte
 // hexadecimal blocks.
