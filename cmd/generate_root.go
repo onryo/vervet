@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"os"
 	"vervet/vervet"
 
 	"github.com/spf13/cobra"
@@ -66,15 +65,6 @@ var generateRootClusterSubCmd = &cobra.Command{
 
 		keys := cluster.Keys
 		if cluster.KeyFile != "" {
-			if _, err := os.Stat(cluster.KeyFile); os.IsNotExist(err) {
-				cd, err := getConfigDir()
-				if err != nil {
-					vervet.PrintFatal(err.Error(), 1)
-				}
-
-				os.Chdir(cd)
-			}
-
 			kf, err := vervet.ReadKeyFile(cluster.KeyFile)
 			if err != nil {
 				vervet.PrintFatal(err.Error(), 1)

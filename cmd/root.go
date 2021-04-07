@@ -3,6 +3,7 @@ package cmd
 import (
 	"fmt"
 	"net/url"
+	"os"
 	"vervet/vervet"
 
 	"github.com/mitchellh/go-homedir"
@@ -69,6 +70,14 @@ func initConfig() {
 	if err != nil {
 		vervet.PrintFatal(fmt.Sprintf("unable to decode into struct, %v", err), 1)
 	}
+
+	// get vervet config direction and set as cwd
+	configDir, err := getConfigDir()
+	if err != nil {
+		vervet.PrintFatal(err.Error(), 1)
+	}
+
+	os.Chdir(configDir)
 }
 
 func getVaultClusterConfig(clusterName string) (*VaultClusterConfig, error) {
