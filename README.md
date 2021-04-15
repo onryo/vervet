@@ -1,4 +1,4 @@
-# vervet
+# vervet 🐒
 
 A simple CLI tool for securely performing common Vault unseal key operations. Unseal keys are secured by private keys that are stored in hardware via the YubiKey OpenPGP application. Vervet streamlines Vault unseal key decryption and common unseal key workflows into single commands for ease of use. Yubico YubiKeys ensure that private keys used to decrypt Vault unseal keys are stored in hardware and non-exportable. Vervet is designed for Vault key officers responsible for managing unseal and recovery keys.
 
