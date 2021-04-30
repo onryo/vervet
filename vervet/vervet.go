@@ -158,7 +158,7 @@ func ShowYubiKey(sn string) error {
 	case 0x31:
 		PrintKV("Pronoun", "he")
 	case 0x32:
-		PrintKV("Pronoun", "he")
+		PrintKV("Pronoun", "she")
 	case 0x39:
 		PrintKV("Pronoun", "they")
 	}
